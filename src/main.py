@@ -22,12 +22,35 @@ except Exception:
     match_profile_to_fields = None
 
 try:
+    from app.fill_engine import fill_form
+except Exception:
+    fill_form = None
+
+try:
+    from app.form_reader import FormReader
+except Exception:
+    FormReader = None
+
+try:
+    from app.field_analyzer import FieldAnalyzer
+except Exception:
+    FieldAnalyzer = None
+
+try:
+    from app.ai_matcher import AIMatcher
+except Exception:
+    AIMatcher = None
+
+try:
     from app.ai_engine import FormBharatAI
 except Exception:
     FormBharatAI = None
 
 
 app = Flask(__name__)
+
+from app.document_vault import register_document_vault
+register_document_vault(app)
 
 
 # --------------------------------------------------
@@ -46,53 +69,351 @@ if register_profile_ui:
 # --------------------------------------------------
 
 TEST_FORM_HTML = """
-<form>
-    <label for="name">Full Name</label>
-    <input
-        id="name"
-        name="name"
-        type="text"
-        placeholder="Enter your name"
-    >
+<!DOCTYPE html>
+<html lang="en">
 
-    <label for="email">Email</label>
-    <input
-        id="email"
-        name="email"
-        type="email"
-        placeholder="Enter email"
-    >
+<head>
 
-    <label for="mobile">Mobile Number</label>
-    <input
-        id="mobile"
-        name="mobile"
-        type="tel"
-        placeholder="Enter mobile number"
-    >
+<meta charset="UTF-8">
 
-    <label for="dob">Date of Birth</label>
-    <input
-        id="dob"
-        name="dob"
-        type="date"
-    >
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
 
-    <label for="address">Address</label>
-    <input
-        id="address"
-        name="address"
-        type="text"
-        placeholder="Enter address"
-    >
+<title>FormBharat Test Form</title>
 
-    <label for="country">Country</label>
-    <select id="country" name="country">
-        <option value="in">India</option>
-        <option value="us">USA</option>
-    </select>
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f7f6;
+    padding: 20px;
+}
+
+.container {
+    max-width: 700px;
+    margin: auto;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+h1 {
+    color: #146c43;
+}
+
+label {
+    display: block;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+
+input,
+textarea,
+select {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+textarea {
+    min-height: 80px;
+}
+
+button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 20px;
+    border: none;
+    border-radius: 8px;
+    background: #146c43;
+    color: white;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.status {
+    margin-top: 15px;
+    font-weight: bold;
+}
+
+.result {
+    margin-top: 15px;
+    background: #eef8f2;
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>FormBharat 🇮🇳</h1>
+
+<div class="card">
+
+<h2>AI Form Filling Test</h2>
+
+<form id="testForm">
+
+<label for="full_name">
+Full Name
+</label>
+
+<input
+    id="full_name"
+    name="full_name"
+    type="text"
+>
+
+<label for="email">
+Email
+</label>
+
+<input
+    id="email"
+    name="email"
+    type="email"
+>
+
+<label for="mobile_number">
+Mobile Number
+</label>
+
+<input
+    id="mobile_number"
+    name="mobile_number"
+    type="tel"
+>
+
+<label for="dob">
+Date of Birth
+</label>
+
+<input
+    id="dob"
+    name="dob"
+    type="date"
+>
+
+<label for="address">
+Address
+</label>
+
+<textarea
+    id="address"
+    name="address"
+></textarea>
+
+<label for="country">
+Country
+</label>
+
+<select
+    id="country"
+    name="country"
+>
+
+<option value="in">
+India
+</option>
+
+<option value="us">
+USA
+</option>
+
+</select>
+
+<button
+    type="button"
+    onclick="analyzeAndFill()"
+>
+    🤖 Analyze & Fill Form
+</button>
+
 </form>
+
+<div
+    id="status"
+    class="status"
+>
+Ready.
+</div>
+
+<div
+    id="result"
+    class="result"
+>
+FormBharat ready to analyze this form.
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+async function analyzeAndFill() {
+
+    const form = document.getElementById("testForm");
+
+    const html = form.outerHTML;
+
+    document.getElementById("status").innerHTML =
+        "🤖 FormBharat analyzing fields...";
+
+    document.getElementById("result").innerHTML =
+        "";
+
+    try {
+
+        const response = await fetch("/analyze", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                html: html
+            })
+
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+
+            throw new Error(
+                data.error || "Analysis failed"
+            );
+
+        }
+
+        const result = data.result;
+
+        // --------------------------------------------------
+        // APPLY FILLED VALUES TO ACTUAL BROWSER FORM
+        // --------------------------------------------------
+
+        const filledFields = result.filled || [];
+
+        for (const item of filledFields) {
+
+            const fieldName = item.field;
+            const value = item.value;
+
+            if (!fieldName) {
+                continue;
+            }
+
+            const element =
+                form.querySelector(
+                    '[name="' + CSS.escape(fieldName) + '"]'
+                ) ||
+                document.getElementById(fieldName);
+
+            if (!element) {
+                continue;
+            }
+
+            const tag = element.tagName.toLowerCase();
+
+            if (tag === "select") {
+
+                element.value = String(value);
+
+            } else if (
+                element.type === "checkbox" ||
+                element.type === "radio"
+            ) {
+
+                element.checked =
+                    ["true", "1", "yes", "on"]
+                    .includes(String(value).toLowerCase());
+
+            } else {
+
+                element.value = String(value);
+            }
+
+            // Let the page know that the value changed.
+            element.dispatchEvent(
+                new Event("input", { bubbles: true })
+            );
+
+            element.dispatchEvent(
+                new Event("change", { bubbles: true })
+            );
+        }
+
+        document.getElementById("status").innerHTML =
+            "✅ Form analyzed and filled successfully";
+
+        document.getElementById("result").innerHTML =
+            "<b>Fields detected:</b> " +
+            result.fields_detected +
+            "<br><br>" +
+
+            "<b>Fields filled:</b> " +
+            (result.filled_count || 0) +
+            "<br><br>" +
+
+            "<b>Fields skipped:</b> " +
+            (result.skipped_count || 0) +
+            "<br><br>" +
+
+            "<pre>" +
+            JSON.stringify(
+                result.filled || [],
+                null,
+                2
+            ) +
+            "</pre>";
+
+    }
+
+    catch (error) {
+
+        document.getElementById("status").innerHTML =
+            "❌ Error";
+
+        document.getElementById("result").innerHTML =
+            "<pre>" +
+            error +
+            "</pre>";
+
+    }
+
+}
+
+</script>
+
+</body>
+
+</html>
 """
+
+
 
 
 # --------------------------------------------------
@@ -438,97 +759,152 @@ def analyze():
 
         data = request.get_json(silent=True) or {}
 
-        profile = data.get("profile", {})
+        profile = data.get("profile")
 
+        if profile is None:
+            from app.profile import get_profile
+            profile = get_profile()
 
         if not isinstance(profile, dict):
-
             return jsonify({
                 "success": False,
                 "error": "Invalid profile data"
             }), 400
 
-
-        # ------------------------------------------
-        # Basic profile information
-        # ------------------------------------------
+        html = data.get("html", "")
 
         result = {
-
-            "message":
-                "Form received successfully.",
-
-            "profile":
-                profile,
-
-            "fields_detected": [
-                "name",
-                "email",
-                "mobile",
-                "dob",
-                "address"
-            ],
-
-            "next_step":
-                "Profile matching engine can now process these fields."
+            "message": "Form received successfully.",
+            "profile": profile
         }
 
+        # --------------------------------------------------
+        # FORM AUTOMATION PIPELINE
+        # HTML → Reader → Analyzer → Profile Matcher
+        # --------------------------------------------------
 
-        # ------------------------------------------
-        # Try AI engine if available
-        # ------------------------------------------
+        if html:
+
+            if FormReader is None:
+                raise RuntimeError("FormReader unavailable")
+
+            if FieldAnalyzer is None:
+                raise RuntimeError("FieldAnalyzer unavailable")
+
+            if match_profile_to_fields is None:
+                raise RuntimeError("Profile Matcher unavailable")
+
+            reader = FormReader()
+            analyzer = FieldAnalyzer()
+
+            fields = reader.read(html)
+
+            analyzed_fields = analyzer.analyze(fields)
+
+            # --------------------------------------------------
+            # AI MATCHER
+            # Field meaning + safety classification
+            # --------------------------------------------------
+
+            if AIMatcher is None:
+                raise RuntimeError("AI Matcher unavailable")
+
+            ai_matcher = AIMatcher()
+
+            for field in analyzed_fields:
+
+                if not isinstance(field, dict):
+                    continue
+
+                ai_text = " ".join([
+                    str(field.get("label") or ""),
+                    str(field.get("name") or ""),
+                    str(field.get("id") or ""),
+                    str(field.get("placeholder") or "")
+                ]).strip()
+
+                ai_result = ai_matcher.match(ai_text)
+
+                field["ai_purpose"] = ai_result.get("purpose")
+                field["ai_confidence"] = ai_result.get("confidence")
+                field["ai_blocked"] = ai_result.get("blocked", False)
+
+                if ai_result.get("reason"):
+                    field["ai_block_reason"] = ai_result["reason"]
+
+            matched_fields = match_profile_to_fields(
+                analyzed_fields,
+                profile
+            )
+
+            result["fields_detected"] = len(fields)
+            result["fields"] = analyzed_fields
+            result["matched_fields"] = matched_fields
+
+            # --------------------------------------------------
+            # FILL ENGINE
+            # Matched profile values → HTML form
+            # --------------------------------------------------
+
+            if fill_form is None:
+                raise RuntimeError("Fill Engine unavailable")
+
+            fill_result = fill_form(
+                html,
+                matched_fields
+            )
+
+            result["filled_html"] = fill_result["html"]
+            result["filled"] = fill_result["filled"]
+            result["skipped"] = fill_result["skipped"]
+            result["filled_count"] = fill_result["filled_count"]
+            result["skipped_count"] = fill_result["skipped_count"]
+
+        else:
+
+            result["fields_detected"] = 0
+            result["fields"] = []
+            result["matched_fields"] = []
+
+        # --------------------------------------------------
+        # Existing AI engine
+        # --------------------------------------------------
 
         if FormBharatAI:
 
             try:
 
                 ai = FormBharatAI()
-
                 ai_result = None
 
-
-                # Try common method names safely
-
                 if hasattr(ai, "analyze_profile"):
-
                     ai_result = ai.analyze_profile(profile)
 
                 elif hasattr(ai, "analyze"):
-
-                    ai_result = ai.analyze(profile)
+                    ai_result = ai.analyze(
+                        result.get("fields", [])
+                    )
 
                 elif hasattr(ai, "process"):
-
                     ai_result = ai.process(profile)
 
-
                 if ai_result is not None:
-
                     result["ai_result"] = ai_result
-
 
             except Exception as ai_error:
 
                 result["ai_warning"] = str(ai_error)
 
-
         return jsonify({
-
             "success": True,
-
             "result": result
-
         })
-
 
     except Exception as error:
 
         return jsonify({
-
             "success": False,
-
             "error": str(error)
-
         }), 500
 
 
