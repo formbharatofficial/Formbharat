@@ -47,19 +47,19 @@ def test_country_matching():
     assert result["blocked"] is False
 
 
-def test_father_name_is_blocked():
+def test_father_name_is_allowed_for_dedicated_profile_value():
     result = ai.match("Father Name")
 
-    assert result["blocked"] is True
-    assert result["purpose"] == "blocked"
-    assert result["reason"] == "related_person"
+    assert result["blocked"] is False
+    assert result["purpose"] == "father_name"
+    assert result["confidence"] == "high"
 
 
-def test_mother_name_is_blocked():
+def test_mother_name_is_allowed_for_dedicated_profile_value():
     result = ai.match("Mother Name")
 
-    assert result["blocked"] is True
-    assert result["purpose"] == "blocked"
+    assert result["blocked"] is False
+    assert result["purpose"] == "mother_name"
 
 
 def test_guardian_name_is_blocked():

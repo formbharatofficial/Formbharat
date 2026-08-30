@@ -1,4 +1,4 @@
-from flask import render_template_string, request, redirect, url_for
+from flask import jsonify, render_template_string, request, redirect, url_for
 from app.profile import init_db, save_profile, get_profile
 
 PROFILE_PAGE = """
@@ -62,6 +62,12 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 def register_profile_ui(app):
     init_db()
 
+    def profile_id_from_path(profile_id):
+        try:
+            return int(profile_id)
+        except (TypeError, ValueError):
+            raise ValueError("profile_id must be an integer between 1 and 5")
+
     @app.route("/profile", methods=["GET", "POST"])
     def profile_page():
         if request.method == "POST":
@@ -81,3 +87,51 @@ def register_profile_ui(app):
             profile=profile,
             saved=request.args.get("saved") == "1"
         )
+
+    @app.route("/api/profile/<profile_id>", methods=["GET"])
+    def get_profile_api(profile_id):
+        try:
+            saved_profile = get_profile(profile_id_from_path(profile_id))
+            return jsonify({
+                "success": True,
+                "profile": saved_profile
+            })
+        except ValueError as error:
+            return jsonify({
+                "success": False,
+                "error": str(error)
+            }), 400
+        except Exception as error:
+            return jsonify({
+                "success": False,
+                "error": str(error)
+            }), 500
+
+    @app.route("/api/profile/<profile_id>", methods=["POST"])
+    def save_profile_api(profile_id):
+        data = request.get_json(silent=True)
+
+        if not isinstance(data, dict):
+            return jsonify({
+                "success": False,
+                "error": "Invalid or missing JSON data"
+            }), 400
+
+        try:
+            parsed_profile_id = profile_id_from_path(profile_id)
+            save_profile(data, parsed_profile_id)
+            return jsonify({
+                "success": True,
+                "message": "Profile saved successfully",
+                "profile": get_profile(parsed_profile_id)
+            })
+        except ValueError as error:
+            return jsonify({
+                "success": False,
+                "error": str(error)
+            }), 400
+        except Exception as error:
+            return jsonify({
+                "success": False,
+                "error": str(error)
+            }), 500

@@ -7,6 +7,7 @@ class AIMatcher:
     - Profile field ka purpose identify karna
     - OTP/CAPTCHA ko block karna
     - Related-person fields ko user's own name se match na karna
+    - Father/mother fields only when their dedicated saved value is available
 
     This module NEVER:
     - handles OTP
@@ -26,12 +27,6 @@ class AIMatcher:
     )
 
     RELATED_PERSON_TERMS = (
-        "father",
-        "father name",
-        "father_name",
-        "mother",
-        "mother name",
-        "mother_name",
         "guardian",
         "guardian name",
         "guardian_name",
@@ -56,6 +51,16 @@ class AIMatcher:
             "full_name",
             "candidate fullname",
             "applicant fullname",
+        ),
+        "father_name": (
+            "father name",
+            "father_name",
+            "fathername",
+        ),
+        "mother_name": (
+            "mother name",
+            "mother_name",
+            "mothername",
         ),
         "email": (
             "email",
@@ -138,8 +143,9 @@ class AIMatcher:
                     "reason": "otp_or_captcha",
                 }
 
-        # Fields belonging to another person must not use
-        # the user's own profile name.
+        # Fields belonging to another person must not be auto-filled.
+        # Father/mother fields are intentionally excluded: they have dedicated
+        # profile keys and can be filled only from those explicit values.
         for term in self.RELATED_PERSON_TERMS:
             if self._normalize(term) in text:
                 return {

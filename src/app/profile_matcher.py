@@ -4,8 +4,8 @@ def match_profile_to_fields(fields, profile):
 
     Goal:
     - High-confidence fields automatically match hon.
-    - Related-name fields (father_name, mother_name etc.)
-      ko user's own name se match na kare.
+    - Father/mother fields only match their dedicated saved profile values.
+    - Other related-name fields never match the user's profile.
     - OTP/CAPTCHA ko kabhi automatically match na kare.
     """
 
@@ -18,6 +18,16 @@ def match_profile_to_fields(fields, profile):
             "candidate_full_name",
             "applicant_name",
             "applicant_full_name"
+        ],
+
+        "father_name": [
+            "father_name",
+            "fathername",
+        ],
+
+        "mother_name": [
+            "mother_name",
+            "mothername",
         ],
 
         "email": [
@@ -69,12 +79,6 @@ def match_profile_to_fields(fields, profile):
 
     # Name-like fields which belong to another person.
     related_name_terms = [
-        "father",
-        "father_name",
-        "fathername",
-        "mother",
-        "mother_name",
-        "mothername",
         "guardian",
         "guardian_name",
         "guardianname",
@@ -144,6 +148,11 @@ def match_profile_to_fields(fields, profile):
 
             result.append(item)
             continue
+        # SAFETY BLOCK: OTHER RELATED PERSON'S NAME
+        #
+        # father_name and mother_name are deliberately not included here.
+        # They can only match their same-named, explicit profile values via
+        # the aliases above; they can never fall back to the user's name.
 
         # --------------------------------------------------
         # SAFETY BLOCK: OTHER PERSON'S NAME
