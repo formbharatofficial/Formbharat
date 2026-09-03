@@ -7,3 +7,6 @@ __pycache__/
 *.bak*
 *before-*
 *start-backup*
+
+# Runtime uploaded documents
+documents/
