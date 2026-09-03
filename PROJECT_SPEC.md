@@ -38,7 +38,10 @@ Final mobile UI, security hardening, complete testing,
 production configuration, deployment and launch preparation.
 
 ## CURRENT PHASE
-Phase 2 — User System
+Phase 3 — Document Vault — COMPLETE
+
+## NEXT PHASE
+Phase 4 — Vacancy
 
 ## IMPORTANT PROJECT RULE
 The roadmap above is LOCKED.

@@ -16,7 +16,10 @@ This roadmap is locked.
 
 ## 2. Current Phase
 Current development phase:
-Phase 2 — User System
+Phase 3 — Document Vault — COMPLETE
+
+Next development phase:
+Phase 4 — Vacancy
 
 ## 3. Change-control rule
 No phase, feature, architecture or major technical decision
