@@ -8,12 +8,35 @@ MAX_PROFILES = 5
 PROFILE_FIELDS = (
     "name", "email", "mobile", "dob", "address", "country",
     "father_name", "mother_name",
+    "gender", "nationality", "category", "state", "district", "pincode",
+    "tenth_roll_number", "tenth_passing_year", "tenth_marks", "tenth_percentage",
+    "twelfth_roll_number", "twelfth_passing_year", "twelfth_marks", "twelfth_percentage",
+    "graduation_degree", "graduation_roll_number", "graduation_passing_year",
+    "graduation_marks", "graduation_percentage",
+    "post_graduation_degree", "post_graduation_roll_number", "post_graduation_passing_year", "post_graduation_marks", "post_graduation_percentage",
+    "diploma_name", "diploma_roll_number", "diploma_passing_year", "diploma_marks", "diploma_percentage",
+    "other_qualification",
 )
 BASE_PROFILE_FIELDS = PROFILE_FIELDS[:6]
 OPTIONAL_PROFILE_FIELDS = PROFILE_FIELDS[6:]
 PROFILE_DEFAULTS = {
     "name": "", "email": "", "mobile": "", "dob": "", "address": "",
     "country": "in", "father_name": "", "mother_name": "",
+    "gender": "", "nationality": "", "category": "", "state": "",
+    "district": "", "pincode": "",
+    "tenth_roll_number": "", "tenth_passing_year": "", "tenth_marks": "",
+    "tenth_percentage": "",
+    "twelfth_roll_number": "", "twelfth_passing_year": "", "twelfth_marks": "",
+    "twelfth_percentage": "",
+    "graduation_degree": "", "graduation_roll_number": "",
+    "graduation_passing_year": "", "graduation_marks": "",
+    "graduation_percentage": "",
+    "post_graduation_degree": "", "post_graduation_roll_number": "",
+    "post_graduation_passing_year": "", "post_graduation_marks": "",
+    "post_graduation_percentage": "",
+    "diploma_name": "", "diploma_roll_number": "",
+    "diploma_passing_year": "", "diploma_marks": "",
+    "diploma_percentage": "", "other_qualification": "",
 }
 
 
@@ -39,7 +62,37 @@ def _profile_table_sql(table_name="profile"):
             address TEXT NOT NULL DEFAULT '',
             country TEXT NOT NULL DEFAULT 'in',
             father_name TEXT NOT NULL DEFAULT '',
-            mother_name TEXT NOT NULL DEFAULT ''
+            mother_name TEXT NOT NULL DEFAULT '',
+            gender TEXT NOT NULL DEFAULT '',
+            nationality TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT '',
+            state TEXT NOT NULL DEFAULT '',
+            district TEXT NOT NULL DEFAULT '',
+            pincode TEXT NOT NULL DEFAULT '',
+            tenth_roll_number TEXT NOT NULL DEFAULT '',
+            tenth_passing_year TEXT NOT NULL DEFAULT '',
+            tenth_marks TEXT NOT NULL DEFAULT '',
+            tenth_percentage TEXT NOT NULL DEFAULT '',
+            twelfth_roll_number TEXT NOT NULL DEFAULT '',
+            twelfth_passing_year TEXT NOT NULL DEFAULT '',
+            twelfth_marks TEXT NOT NULL DEFAULT '',
+            twelfth_percentage TEXT NOT NULL DEFAULT '',
+            graduation_degree TEXT NOT NULL DEFAULT '',
+            graduation_roll_number TEXT NOT NULL DEFAULT '',
+            graduation_passing_year TEXT NOT NULL DEFAULT '',
+            graduation_marks TEXT NOT NULL DEFAULT '',
+            graduation_percentage TEXT NOT NULL DEFAULT '',
+            post_graduation_degree TEXT NOT NULL DEFAULT '',
+            post_graduation_roll_number TEXT NOT NULL DEFAULT '',
+            post_graduation_passing_year TEXT NOT NULL DEFAULT '',
+            post_graduation_marks TEXT NOT NULL DEFAULT '',
+            post_graduation_percentage TEXT NOT NULL DEFAULT '',
+            diploma_name TEXT NOT NULL DEFAULT '',
+            diploma_roll_number TEXT NOT NULL DEFAULT '',
+            diploma_passing_year TEXT NOT NULL DEFAULT '',
+            diploma_marks TEXT NOT NULL DEFAULT '',
+            diploma_percentage TEXT NOT NULL DEFAULT '',
+            other_qualification TEXT NOT NULL DEFAULT ''
         )
     """
 

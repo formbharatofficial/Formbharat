@@ -31,16 +31,7 @@ def test_get_profile_returns_requested_profile(client):
     assert response.status_code == 200
     assert response.get_json() == {
         "success": True,
-        "profile": {
-            "name": "",
-            "email": "",
-            "mobile": "",
-            "dob": "",
-            "address": "",
-            "country": "in",
-            "father_name": "",
-            "mother_name": "",
-        },
+        "profile": profile.PROFILE_DEFAULTS,
     }
 
 
@@ -97,3 +88,28 @@ def test_profiles_are_independent_through_api(client):
 
     assert first_result["profile"]["name"] == "API User 1"
     assert second_result["profile"]["name"] == "Second API Profile"
+
+
+def test_post_profile_saves_extended_education_fields(client):
+    data = _profile_data(1)
+    data.update({
+        "post_graduation_degree": "M.A.",
+        "post_graduation_roll_number": "PG-1",
+        "post_graduation_passing_year": "2018",
+        "post_graduation_marks": "800",
+        "post_graduation_percentage": "80%",
+        "diploma_name": "Computer Diploma",
+        "diploma_roll_number": "D-1",
+        "diploma_passing_year": "2017",
+        "diploma_marks": "700",
+        "diploma_percentage": "70%",
+        "other_qualification": "CCC",
+    })
+
+    response = client.post("/api/profile/1", json=data)
+
+    assert response.status_code == 200
+    saved = response.get_json()["profile"]
+
+    for key, value in data.items():
+        assert saved[key] == value

@@ -445,3 +445,57 @@ def register_document_vault(app):
 
 
     print("Document Vault registered successfully.")
+DOCUMENT_VAULT_PAGE = """
+<!doctype html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FormBharat - Document Vault</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f7f6;margin:0;padding:20px}
+.container{max-width:700px;margin:auto}.card{background:#fff;padding:20px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:15px}
+h1{color:#146c43}label{display:block;margin-top:14px;margin-bottom:6px;font-weight:bold}
+input{width:100%;box-sizing:border-box;padding:13px;border:1px solid #ccc;border-radius:8px;font-size:16px}
+button{width:100%;margin-top:15px;padding:13px;background:#146c43;color:#fff;border:0;border-radius:8px;font-size:16px;font-weight:bold}
+.doc{padding:12px;border-bottom:1px solid #ddd}.delete{background:#b3261e}
+</style></head>
+<body><div class="container">
+<div class="card"><h1>FormBharat 📁</h1><p>Document Vault</p>
+<form id="uploadForm">
+<label>Profile ID</label><input id="profile_id" type="number" min="1" max="5" value="1" required>
+<label>Document Type</label><input id="doc_type" placeholder="Aadhaar / Marksheet / Other" required>
+<label>Select File</label><input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
+<button type="submit">Upload Document</button>
+</form><p id="message"></p></div>
+<div class="card"><h2>Saved Documents</h2><button onclick="loadDocuments()">Refresh Documents</button><div id="documents"></div></div>
+</div>
+<script>
+const msg=document.getElementById('message'),docs=document.getElementById('documents');
+async function loadDocuments(){
+ const id=document.getElementById('profile_id').value||1;
+ const r=await fetch('/api/documents/'+id),d=await r.json();
+ if(!d.success){docs.innerHTML='Error: '+d.error;return}
+ docs.innerHTML=d.documents.length?d.documents.map(x=>`<div class="doc"><b>${x.doc_type}</b><br>${x.original_filename}<br>Version: ${x.document_version}<br><a href="/api/documents/file/${x.id}" target="_blank">View File</a><button class="delete" onclick="deleteDocument(${x.id})">Delete</button></div>`).join(''):'No documents saved yet';
+}
+async function deleteDocument(id){
+ if(!confirm('Delete this document?'))return;
+ const r=await fetch('/api/documents/'+id,{method:'DELETE'}),d=await r.json();
+ msg.textContent=d.message||d.error;loadDocuments();
+}
+document.getElementById('uploadForm').onsubmit=async e=>{
+ e.preventDefault();msg.textContent='Uploading...';
+ const f=new FormData();
+ f.append('profile_id',document.getElementById('profile_id').value);
+ f.append('doc_type',document.getElementById('doc_type').value);
+ f.append('file',document.getElementById('file').files[0]);
+ const r=await fetch('/api/documents/upload',{method:'POST',body:f}),d=await r.json();
+ msg.textContent=d.message||d.error;
+ if(d.success){document.getElementById('file').value='';loadDocuments()}
+};
+loadDocuments();
+</script></body></html>
+"""
+
+def register_document_vault_ui(app):
+    @app.route("/documents", methods=["GET"])
+    def document_vault_page():
+        return DOCUMENT_VAULT_PAGE

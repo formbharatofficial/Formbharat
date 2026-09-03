@@ -49,8 +49,137 @@ except Exception:
 
 app = Flask(__name__)
 
-from app.document_vault import register_document_vault
+# --------------------------------------------------
+# Phase 2 Profile Media
+# Photo / Signature use the existing Document Vault.
+# --------------------------------------------------
+
+@app.route("/api/profile/<int:profile_id>/media/<media_type>",
+           methods=["POST"])
+def upload_profile_media(profile_id, media_type):
+    from app.profile import profile_exists
+    from app.document_vault import STORAGE_DIR, allowed_file
+    from werkzeug.utils import secure_filename
+    import hashlib
+    import os
+
+    if not profile_exists(profile_id):
+        return jsonify({
+            "success": False,
+            "error": "profile_id must refer to an existing valid profile"
+        }), 400
+
+    media_type = str(media_type).strip().lower()
+    if media_type not in ("photo", "signature"):
+        return jsonify({
+            "success": False,
+            "error": "media_type must be photo or signature"
+        }), 400
+
+    if "file" not in request.files:
+        return jsonify({
+            "success": False,
+            "error": "file is required"
+        }), 400
+
+    uploaded = request.files["file"]
+    filename = secure_filename(uploaded.filename or "")
+
+    if not filename or not allowed_file(filename):
+        return jsonify({
+            "success": False,
+            "error": "Only PDF, JPG, JPEG and PNG are allowed"
+        }), 400
+
+    data = uploaded.read()
+    if len(data) > 10 * 1024 * 1024:
+        return jsonify({
+            "success": False,
+            "error": "Maximum file size is 10 MB"
+        }), 400
+
+    digest = hashlib.sha256(data).hexdigest()
+    ext = filename.rsplit(".", 1)[1].lower()
+
+    media_dir = os.path.join(STORAGE_DIR, str(profile_id))
+    os.makedirs(media_dir, exist_ok=True)
+
+    storage_path = os.path.join(
+        media_dir, f"{media_type}_{digest}.{ext}"
+    )
+
+    with open(storage_path, "wb") as f:
+        f.write(data)
+
+    from app.document_vault import get_db, _generate_document_reference
+    from datetime import datetime
+
+    conn = get_db()
+    try:
+        now = datetime.utcnow().isoformat()
+
+        previous = conn.execute("""
+            SELECT id, document_version
+            FROM documents
+            WHERE profile_id = ? AND doc_type = ?
+            ORDER BY document_version DESC
+            LIMIT 1
+        """, (profile_id, media_type)).fetchone()
+
+        version = (previous["document_version"] if previous else 0) + 1
+        reference = _generate_document_reference(conn)
+
+        cur = conn.execute("""
+            INSERT INTO documents
+            (
+                profile_id, doc_type, original_filename,
+                storage_path, mime_type, file_hash,
+                extracted_text, extracted_data, verified,
+                created_at, updated_at, document_version,
+                document_reference
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            profile_id,
+            media_type,
+            filename,
+            storage_path,
+            uploaded.mimetype or "",
+            digest,
+            "",
+            "{}",
+            0,
+            now,
+            now,
+            version,
+            reference,
+        ))
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"{media_type.capitalize()} uploaded successfully",
+            "profile_id": profile_id,
+            "media_type": media_type,
+            "document_id": cur.lastrowid,
+            "document_version": version,
+            "document_reference": reference
+        })
+    finally:
+        conn.close()
+
+
+from app.document_vault import register_document_vault, register_document_vault_ui
 register_document_vault(app)
+register_document_vault_ui(app)
+
+from app.verified_profile import (
+    init_verified_profile_db,
+    save_verified_profile,
+    get_verified_profile,
+)
+init_verified_profile_db()
 
 
 # --------------------------------------------------
@@ -63,6 +192,40 @@ if register_profile_ui:
     except Exception as e:
         print("Profile UI warning:", e)
 
+
+
+# --------------------------------------------------
+# Verified Profile
+# --------------------------------------------------
+
+@app.route("/api/profile/<int:profile_id>/verified", methods=["GET", "POST"])
+def verified_profile_api(profile_id):
+    try:
+        if request.method == "POST":
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid or missing JSON data"
+                }), 400
+
+            save_verified_profile(
+                data,
+                profile_id=profile_id,
+                verified=True,
+            )
+
+        verified = get_verified_profile(profile_id)
+
+        return jsonify({
+            "success": True,
+            "verified": verified is not None,
+            "profile": verified,
+        })
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+    except Exception as error:
+        return jsonify({"success": False, "error": str(error)}), 500
 
 # --------------------------------------------------
 # Test form
@@ -759,23 +922,27 @@ def analyze():
 
         data = request.get_json(silent=True) or {}
 
-        profile = data.get("profile")
+        # Bible boundary:
+        # Raw Profile must never be used for form filling.
+        # Form filling may use only an explicitly Verified Profile.
+        profile_id = data.get("profile_id", 1)
 
-        if profile is None:
-            from app.profile import get_profile
-            profile = get_profile()
-
-        if not isinstance(profile, dict):
+        try:
+            profile_id = int(profile_id)
+        except (TypeError, ValueError):
             return jsonify({
                 "success": False,
-                "error": "Invalid profile data"
+                "error": "profile_id must be an integer between 1 and 5"
             }), 400
+
+        profile = get_verified_profile(profile_id)
 
         html = data.get("html", "")
 
         result = {
             "message": "Form received successfully.",
-            "profile": profile
+            "profile": profile,
+            "verified_profile": profile is not None,
         }
 
         # --------------------------------------------------
