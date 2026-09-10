@@ -50,6 +50,98 @@ except Exception:
 app = Flask(__name__)
 
 # --------------------------------------------------
+# Phase 4 Vacancy
+# Vacancy Data Foundation APIs
+# --------------------------------------------------
+
+from app.vacancy import (
+    init_vacancy_db,
+    create_vacancy,
+    get_vacancy,
+    list_vacancies,
+)
+
+init_vacancy_db()
+
+
+@app.route("/api/vacancies", methods=["POST"])
+def create_vacancy_api():
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "success": False,
+            "error": "Invalid or missing JSON data"
+        }), 400
+
+    try:
+        vacancy_id = create_vacancy(
+            title=str(data.get("title", "")).strip(),
+            organization=str(data.get("organization", "")).strip(),
+            category=str(data.get("category", "")).strip(),
+            description=str(data.get("description", "")).strip(),
+            eligibility=str(data.get("eligibility", "")).strip(),
+            application_start=str(data.get("application_start", "")).strip(),
+            application_end=str(data.get("application_end", "")).strip(),
+            exam_date=str(data.get("exam_date", "")).strip(),
+            official_link=str(data.get("official_link", "")).strip(),
+        )
+
+        return jsonify({
+            "success": True,
+            "vacancy": get_vacancy(vacancy_id)
+        }), 201
+
+    except ValueError as error:
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 400
+
+    except Exception as error:
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
+
+
+@app.route("/api/vacancies", methods=["GET"])
+def list_vacancies_api():
+    try:
+        return jsonify({
+            "success": True,
+            "vacancies": list_vacancies()
+        })
+    except Exception as error:
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
+
+
+@app.route("/api/vacancies/<int:vacancy_id>", methods=["GET"])
+def get_vacancy_api(vacancy_id):
+    try:
+        vacancy = get_vacancy(vacancy_id)
+
+        if vacancy is None:
+            return jsonify({
+                "success": False,
+                "error": "Vacancy not found"
+            }), 404
+
+        return jsonify({
+            "success": True,
+            "vacancy": vacancy
+        })
+    except Exception as error:
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
+
+
+# --------------------------------------------------
 # Phase 2 Profile Media
 # Photo / Signature use the existing Document Vault.
 # --------------------------------------------------
