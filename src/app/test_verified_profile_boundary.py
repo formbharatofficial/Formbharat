@@ -59,3 +59,171 @@ def test_analyze_must_not_use_raw_profile_directly(client):
     assert result.get("filled_count", 0) == 0, (
         "RAW PROFILE IS BEING USED DIRECTLY BY /analyze"
     )
+
+
+def _insert_extracted_document(
+    db_path, profile_id, extracted_data, reference="DOC-GATE", verified=0
+):
+    import json
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO documents (
+                profile_id, doc_type, original_filename, storage_path,
+                mime_type, file_hash, extracted_text, extracted_data,
+                verified, created_at, updated_at, document_version,
+                document_reference
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                profile_id, "aadhaar", "aadhaar.png", "/tmp/aadhaar.png",
+                "image/png", "gate-hash-" + reference, "",
+                json.dumps(extracted_data), verified,
+                "2026-09-22T00:00:00", "2026-09-22T00:00:00",
+                1, reference,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_direct_verified_true_cannot_forge_a_verified_profile(client, tmp_path):
+    from app import profile
+
+    profile.save_profile({"name": "Forged User"}, profile_id=1)
+
+    response = client.post(
+        "/api/profile/1/verified",
+        json={
+            "verified": True,
+            "name": "Forged User",
+        },
+    )
+
+    body = response.get_json()
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["verified"] is False
+    assert body["profile"] is None
+
+    stored = client.get("/api/profile/1/verified").get_json()
+    assert stored["verified"] is False
+    assert stored["profile"] is None
+
+
+def test_matching_data_requires_user_confirmation_before_promotion(
+    client, tmp_path
+):
+    from app import profile
+
+    profile.save_profile({"name": "Sunil Kumar"}, profile_id=1)
+    _insert_extracted_document(
+        tmp_path / "formbharat.db",
+        1,
+        {"name": "Sunil Kumar"},
+        verified=1,
+    )
+
+    unconfirmed = client.post(
+        "/api/profile/1/verified",
+        json={"verified": True, "name": "Sunil Kumar"},
+    ).get_json()
+
+    assert unconfirmed["success"] is False
+    assert unconfirmed["verified"] is False
+    assert "confirmation" in unconfirmed["error"].lower()
+
+    stored = client.get("/api/profile/1/verified").get_json()
+    assert stored["verified"] is False
+
+
+def test_matching_verified_data_can_be_promoted_with_confirmation(
+    client, tmp_path
+):
+    from app import profile
+
+    profile.save_profile({"name": "Sunil Kumar"}, profile_id=1)
+    _insert_extracted_document(
+        tmp_path / "formbharat.db",
+        1,
+        {"name": "Sunil Kumar"},
+        verified=1,
+    )
+
+    response = client.post(
+        "/api/profile/1/verified",
+        json={"confirmed": True, "verified": True},
+    )
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert body["verified"] is True
+    assert body["profile"]["name"] == "Sunil Kumar"
+
+
+def test_mismatch_cannot_become_verified_even_with_confirmation(
+    client, tmp_path
+):
+    from app import profile
+
+    profile.save_profile({"name": "Sunil Kumar"}, profile_id=1)
+    _insert_extracted_document(
+        tmp_path / "formbharat.db",
+        1,
+        {"name": "Sunil Singh"},
+        reference="DOC-MISMATCH",
+        verified=1,
+    )
+
+    response = client.post(
+        "/api/profile/1/verified",
+        json={
+            "confirmed": True,
+            "verified": True,
+            "name": "Sunil Kumar",
+        },
+    )
+
+    body = response.get_json()
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["verified"] is False
+    assert body["profile"] is None
+
+    stored = client.get("/api/profile/1/verified").get_json()
+    assert stored["verified"] is False
+    assert stored["profile"] is None
+
+
+def test_matching_unverified_document_cannot_promote_a_verified_profile(
+    client, tmp_path
+):
+    from app import profile
+
+    profile.save_profile({"name": "Sunil Kumar"}, profile_id=1)
+    _insert_extracted_document(
+        tmp_path / "formbharat.db",
+        1,
+        {"name": "Sunil Kumar"},
+        verified=0,
+    )
+
+    response = client.post(
+        "/api/profile/1/verified",
+        json={"confirmed": True, "verified": True},
+    )
+
+    body = response.get_json()
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["verified"] is False
+    assert body["profile"] is None
+
+    stored = client.get("/api/profile/1/verified").get_json()
+    assert stored["verified"] is False
+    assert stored["profile"] is None

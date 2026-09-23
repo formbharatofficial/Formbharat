@@ -262,7 +262,11 @@ def upload_profile_media(profile_id, media_type):
         conn.close()
 
 
-from app.document_vault import register_document_vault, register_document_vault_ui
+from app.document_vault import (
+    register_document_vault,
+    register_document_vault_ui,
+    DB_PATH as DOCUMENTS_DB_PATH,
+)
 register_document_vault(app)
 register_document_vault_ui(app)
 
@@ -270,6 +274,13 @@ from app.verified_profile import (
     init_verified_profile_db,
     save_verified_profile,
     get_verified_profile,
+)
+from app.profile import get_profile
+from app.verification import (
+    verify_profile_documents,
+    combined_field_results,
+    can_promote_verified_profile,
+    verified_data_from_results,
 )
 init_verified_profile_db()
 
@@ -301,8 +312,37 @@ def verified_profile_api(profile_id):
                     "error": "Invalid or missing JSON data"
                 }), 400
 
+            # verified=true in the request is never enough to promote.
+            confirmed = data.get("confirmed") is True
+
+            report = verify_profile_documents(
+                get_profile(profile_id),
+                profile_id,
+                DOCUMENTS_DB_PATH,
+            )
+            field_results = combined_field_results(report["documents"])
+            promotable = can_promote_verified_profile(field_results)
+
+            if not promotable:
+                return jsonify({
+                    "success": False,
+                    "verified": False,
+                    "profile": None,
+                    "error": "Profile cannot be marked verified until matching document data is confirmed",
+                    "verification": report,
+                }), 400
+
+            if not confirmed:
+                return jsonify({
+                    "success": False,
+                    "verified": False,
+                    "profile": None,
+                    "error": "User confirmation is required before promoting a verified profile",
+                    "verification": report,
+                }), 400
+
             save_verified_profile(
-                data,
+                verified_data_from_results(field_results),
                 profile_id=profile_id,
                 verified=True,
             )

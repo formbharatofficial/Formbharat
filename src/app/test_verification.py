@@ -155,3 +155,63 @@ def test_promotion_requires_at_least_one_verified_field():
     }
 
     assert can_promote_verified_profile(unavailable_results) is False
+
+
+def test_combined_field_results_block_on_any_document_mismatch():
+    from app.verification import combined_field_results, can_promote_verified_profile
+
+    combined = combined_field_results([
+        {
+            "fields": {
+                "name": {
+                    "status": "verified",
+                    "document_value": "Sunil Kumar",
+                },
+            },
+        },
+        {
+            "fields": {
+                "name": {
+                    "status": "needs_review",
+                    "document_value": "Sunil Singh",
+                },
+            },
+        },
+    ])
+
+    assert combined["name"]["status"] == "needs_review"
+    assert can_promote_verified_profile(combined) is False
+
+
+def test_combined_field_results_reject_unverified_documents():
+    from app.verification import combined_field_results, can_promote_verified_profile
+
+    unverified = combined_field_results([
+        {
+            "document_verified": False,
+            "fields": {
+                "name": {
+                    "status": "verified",
+                    "document_value": "Sunil Kumar",
+                },
+            },
+        },
+    ])
+
+    assert "name" not in unverified
+    assert can_promote_verified_profile(unverified) is False
+
+    verified = combined_field_results([
+        {
+            "document_verified": True,
+            "fields": {
+                "name": {
+                    "status": "verified",
+                    "document_value": "Sunil Kumar",
+                },
+            },
+        },
+    ])
+
+    assert verified["name"]["status"] == "verified"
+    assert can_promote_verified_profile(verified) is True

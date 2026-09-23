@@ -165,4 +165,51 @@ def can_promote_verified_profile(results):
 
     return has_verified_field
 
-    return True
+
+def combined_field_results(documents):
+    """
+    Merge per-document field results for promotion.
+
+    Documents with document_verified == False never contribute field data.
+    Any needs_review status for a field blocks that field.
+    A field is verified only when at least one verified document verified it
+    and no contributing document marked it needs_review.
+    """
+    if not isinstance(documents, list):
+        raise ValueError("documents must be a list")
+
+    combined = {}
+
+    for document in documents:
+        if not isinstance(document, dict):
+            continue
+
+        if "document_verified" in document and not document["document_verified"]:
+            continue
+
+        fields = document.get("fields")
+        if not isinstance(fields, dict):
+            continue
+
+        for field, result in fields.items():
+            if not isinstance(result, dict):
+                combined[field] = {"status": "needs_review"}
+                continue
+
+            existing = combined.get(field)
+            if existing is None:
+                combined[field] = dict(result)
+                continue
+
+            existing_status = existing.get("status")
+            new_status = result.get("status")
+
+            if existing_status == "needs_review":
+                continue
+
+            if new_status == "needs_review":
+                combined[field] = dict(result)
+            elif existing_status != "verified" and new_status == "verified":
+                combined[field] = dict(result)
+
+    return combined
