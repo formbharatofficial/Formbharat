@@ -1,5 +1,18 @@
+import importlib.util
 import sqlite3
+from pathlib import Path
+
 import app.vacancy as vacancy
+
+
+def _load_app():
+    spec = importlib.util.spec_from_file_location(
+        "formbharat_main_for_vacancy_test",
+        Path(__file__).resolve().parents[1] / "main.py",
+    )
+    main = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(main)
+    return main.app
 
 
 def test_vacancy_table_can_be_created(tmp_path, monkeypatch):
@@ -61,9 +74,7 @@ def test_list_vacancies(tmp_path, monkeypatch):
     assert items[0]["title"] == "Vacancy Two"
 
 def test_vacancy_api_create_list_and_get():
-    from main import app
-
-    client = app.test_client()
+    client = _load_app().test_client()
 
     response = client.post(
         "/api/vacancies",
@@ -97,9 +108,7 @@ def test_vacancy_api_create_list_and_get():
 
 
 def test_vacancy_api_validation_and_not_found():
-    from main import app
-
-    client = app.test_client()
+    client = _load_app().test_client()
 
     response = client.post(
         "/api/vacancies",
