@@ -1,42 +1,27 @@
 # FormBharat — PROJECT STATUS
 
 ## CURRENT POSITION
-- Current Phase: Phase 4 — Vacancy
-- Status: IN PROGRESS
-- Last verified device: Android / Termux
-- Latest verified backup: 2026-09-21
+- Current Phase: Phase 5 — Form Intelligence
+- Status: COMPLETE
+- Last verified device: Windows
+- Latest verified backup: 2026-09-25
 
 ## PHASE STATUS
 - Phase 1 — Foundation: COMPLETE
 - Phase 2 — User System: COMPLETE
 - Phase 3 — Document Vault: COMPLETE
-- Phase 4 — Vacancy: IN PROGRESS
-- Phase 5 — Form Intelligence: NOT STARTED
+- Phase 4 — Vacancy: COMPLETE
+- Phase 5 — Form Intelligence: COMPLETE
 - Phase 6 — Assisted Form Filling: NOT STARTED
 - Phase 7 — Application Tracker: NOT STARTED
 - Phase 8 — Mobile UI + Security + Production: NOT STARTED
 
-## VERIFIED PHASE 4 WORK
-- Vacancy SQLite table foundation exists
-- Create vacancy exists
-- Get vacancy exists
-- List vacancies exists
-- Vacancy API create/list/get exists
-- Required-field validation exists
-- Not-found handling exists
-- Vacancy tests exist
-
-## IMPORTANT EXISTING FOUNDATIONS
-- verified_profile.py
-- verification.py
-- fill_engine.py
-- browser.py
-- form_reader.py
-- field_analyzer.py
-- ai_matcher.py
-- ai_engine.py
-
-These existing foundations must be audited before rebuilding or duplicating anything.
+## PHASE 5 RECORD
+Phase 5 understands supplied HTML and HTML already rendered by a caller.
+It can reread a new supplied HTML snapshot.
+It does not fill fields, click through steps, or submit a form.
+Live `Browser.open` integration is not claimed as a Phase 5 completion requirement.
+Unsupported labels, including Hindi labels with no specified mapping, stay unknown.
 
 ## LOCKED ROADMAP
 1. Foundation
@@ -55,8 +40,8 @@ These existing foundations must be audited before rebuilding or duplicating anyt
 - Related-person fields such as Father/Mother must not be globally blocked when verified data exists in the user's saved profile/documents.
 
 ## CURRENT NEXT STEP
-Audit Phase 4 against the FormBharat specification and existing tests.
-Do not declare Phase 4 complete until requirements and tests are verified.
+Do not start Phase 6 until this Phase 5 checkpoint is the current commit on main.
+Phase 6 is Assisted Form Filling and has not started.
 
 ## WORK RULE
 Do not guess.
@@ -73,7 +58,9 @@ When changing device:
 4. Never start by guessing what was previously completed.
 
 ## LAST VERIFIED LOCAL COMMIT
-7ec80f0 — Add Phase 4 vacancy data foundation
+748ffbf — Complete Phase 1-4 foundation and quality gates
+
+Phase 5 is recorded by the commit that contains this status update.
 
 ## NOTES
 This file is the project continuity record.

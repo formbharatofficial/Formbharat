@@ -79,6 +79,20 @@ def test_father_and_mother_names_are_not_invented_without_dedicated_values():
     assert result[1]["profile_value"] is None
 
 
+def test_medium_confidence_match_is_not_filled():
+    profile = {"name": "Test User"}
+    fields = [
+        {"id": "notes", "label": "Enter candidate name carefully", "name": "notes"}
+    ]
+
+    result = match_profile_to_fields(fields, profile)
+
+    assert result[0]["profile_key"] == "name"
+    assert result[0]["match_confidence"] == "medium"
+    assert result[0]["matched"] is False
+    assert result[0]["profile_value"] is None
+
+
 def test_otp_and_captcha_are_always_blocked():
     profile = {
         "otp": "123456",

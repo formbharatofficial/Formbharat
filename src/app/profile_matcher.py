@@ -224,7 +224,7 @@ def match_profile_to_fields(fields, profile):
             for profile_key, phrases in normalized_values.items():
 
                 if any(
-                    phrase in combined
+                    phrase.replace(" ", "_") in combined
                     for phrase in phrases
                 ):
                     matched_key = profile_key
@@ -237,6 +237,7 @@ def match_profile_to_fields(fields, profile):
 
         if (
             matched_key
+            and match_confidence == "high"
             and isinstance(profile, dict)
             and profile.get(matched_key) not in (None, "")
         ):
@@ -244,6 +245,14 @@ def match_profile_to_fields(fields, profile):
             item["profile_key"] = matched_key
             item["profile_value"] = profile.get(matched_key)
             item["matched"] = True
+            item["match_confidence"] = match_confidence
+
+        elif matched_key and match_confidence != "high":
+            # Phrase-level understanding is kept, but medium or uncertain
+            # confidence must not supply a value for silent auto-fill.
+            item["profile_key"] = matched_key
+            item["profile_value"] = None
+            item["matched"] = False
             item["match_confidence"] = match_confidence
 
         else:

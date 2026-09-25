@@ -1,60 +1,34 @@
 # FormBharat — Current State
 
 ## Current Phase
-Phase 3 — Document Vault — COMPLETE
+Phase 5 — Form Intelligence: COMPLETE
 
 ## Next Phase
-Phase 4 — Vacancy
+Phase 6 — Assisted Form Filling: NOT STARTED
 
-## Phase 1
-Foundation — COMPLETE
+## Phase Status
+- Phase 1 — Foundation: COMPLETE
+- Phase 2 — User System: COMPLETE
+- Phase 3 — Document Vault: COMPLETE
+- Phase 4 — Vacancy: COMPLETE
+- Phase 5 — Form Intelligence: COMPLETE
+- Phase 6 — Assisted Form Filling: NOT STARTED
+- Phase 7 — Application Tracker: NOT STARTED
+- Phase 8 — Mobile UI + Security + Production: NOT STARTED
 
-## Phase 2 Progress
-The following work has already been present/implemented around
-the current Profile/User System work:
+## Phase 5 Limitation
+Phase 5 understands supplied HTML and HTML already rendered by a caller.
+It supports rereading a new supplied HTML snapshot.
+It does not fill fields, click through steps, or submit a form.
+Live `Browser.open` integration is not claimed as a Phase 5 completion requirement.
 
-- Profile API work
-- Profile storage work
-- Profile field matcher
-- AI matcher-related project files
-- Existing tests related to profile/matcher functionality
-- Git tracking issue for src was resolved
-- Latest changes successfully pushed to GitHub
-
-## Latest GitHub State
-Repository:
+## Repository
 formbharatofficial/Formbharat
 
-The latest successful push included the profile-related changes.
+Previous verified checkpoint on main:
+748ffbf — Complete Phase 1-4 foundation and quality gates
 
-## Immediate Development Rule
-Continue Phase 2 from the existing code.
-Do not redesign the project or create a new roadmap.
-
-Before changing code:
-- inspect the existing implementation
-- inspect relevant tests
-- identify the exact missing Phase 2 requirement
-- implement only that requirement
-- run tests
-- commit and push the completed work
-
-## Phase 3 Completion
-Document Vault implementation has been completed and verified.
-
-Verified:
-- Secure document storage
-- Document metadata
-- OCR/text extraction foundation
-- Document versioning
-- Document references
-- Upload and document listing
-- View/download document files
-- Document deletion
-- Automated test suite: 64 passed
-- Browser end-to-end verification of upload, list, view and delete
-
-## Next Major Phase
-Phase 4 — Vacancy
-
-Do not start Phase 4 until the Phase 3 completion state is committed and verified.
+## Development Rule
+The 8-phase roadmap is locked.
+Do not start Phase 6 in this checkpoint.
+Inspect the existing Phase 5 reader and field analyzer before changing them.
