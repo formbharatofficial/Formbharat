@@ -15,6 +15,21 @@ STORAGE_DIR = os.path.join(BASE_DIR, "documents")
 
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_DOC_TYPES = {
+    "aadhaar",
+    "pan",
+    "10th",
+    "12th",
+    "graduation",
+    "category",
+    "domicile",
+    "income",
+    "photo",
+    "signature",
+    "other",
+    "identity",
+    "education",
+}
 
 
 def _documents_table_sql():
@@ -33,7 +48,10 @@ def _documents_table_sql():
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             document_version INTEGER NOT NULL DEFAULT 1,
-            document_reference TEXT NOT NULL
+            document_reference TEXT NOT NULL,
+            processing_status TEXT NOT NULL DEFAULT 'processed',
+            file_size INTEGER NOT NULL DEFAULT 0,
+            capture_source TEXT NOT NULL DEFAULT 'file'
         )
     """
 
@@ -65,6 +83,21 @@ def init_db():
         if "document_reference" not in columns:
             conn.execute(
                 "ALTER TABLE documents ADD COLUMN document_reference TEXT"
+            )
+        if "processing_status" not in columns:
+            conn.execute(
+                "ALTER TABLE documents ADD COLUMN processing_status "
+                "TEXT NOT NULL DEFAULT 'processed'"
+            )
+        if "file_size" not in columns:
+            conn.execute(
+                "ALTER TABLE documents ADD COLUMN file_size "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+        if "capture_source" not in columns:
+            conn.execute(
+                "ALTER TABLE documents ADD COLUMN capture_source "
+                "TEXT NOT NULL DEFAULT 'file'"
             )
 
         rows = conn.execute(
@@ -102,6 +135,28 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _clear_verified_profile(conn, profile_id):
+    tables = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    if "verified_profile" not in tables:
+        return
+    conn.execute(
+        "UPDATE verified_profile SET verified = 0 WHERE profile_id = ?",
+        (profile_id,),
+    )
+
+
+def _capture_source(value):
+    source = str(value or "file").strip().lower()
+    if source in {"file", "camera"}:
+        return source
+    return None
 
 
 def allowed_file(filename):
@@ -147,6 +202,62 @@ def register_document_vault(app):
     init_db()
     os.makedirs(STORAGE_DIR, exist_ok=True)
 
+    @app.route("/api/documents/preview", methods=["POST"])
+    def preview_document():
+        try:
+            profile_id = request.form.get("profile_id")
+            doc_type = request.form.get("doc_type", "").strip().lower()
+            capture_source = _capture_source(request.form.get("capture_source", "file"))
+            if capture_source is None:
+                return jsonify({
+                    "success": False,
+                    "error": "capture_source must be file or camera"
+                }), 400
+            try:
+                profile_id = int(profile_id)
+                if not profile_exists(profile_id):
+                    raise ValueError
+            except (TypeError, ValueError):
+                return jsonify({
+                    "success": False,
+                    "error": "profile_id must refer to an existing valid profile"
+                }), 400
+            if doc_type not in ALLOWED_DOC_TYPES:
+                return jsonify({
+                    "success": False,
+                    "error": "doc_type is not a supported document type"
+                }), 400
+            if "file" not in request.files:
+                return jsonify({
+                    "success": False,
+                    "error": "file is required"
+                }), 400
+            file = request.files["file"]
+            if not file.filename or not allowed_file(file.filename):
+                return jsonify({
+                    "success": False,
+                    "error": "Only PDF, JPG, JPEG and PNG are allowed"
+                }), 400
+            data = file.read()
+            if len(data) > MAX_FILE_SIZE:
+                return jsonify({
+                    "success": False,
+                    "error": "Maximum file size is 10 MB"
+                }), 400
+            return jsonify({
+                "success": True,
+                "stored": False,
+                "preview": {
+                    "filename": file.filename,
+                    "file_size": len(data),
+                    "doc_type": doc_type,
+                    "capture_source": capture_source,
+                    "mime_type": file.mimetype or "",
+                },
+            })
+        except Exception as error:
+            return jsonify({"success": False, "error": str(error)}), 500
+
     @app.route("/api/documents/upload", methods=["POST"])
     def upload_document():
         try:
@@ -173,6 +284,19 @@ def register_document_vault(app):
                 return jsonify({
                     "success": False,
                     "error": "doc_type is required"
+                }), 400
+
+            if doc_type.strip().lower() not in ALLOWED_DOC_TYPES:
+                return jsonify({
+                    "success": False,
+                    "error": "doc_type is not a supported document type"
+                }), 400
+            doc_type = doc_type.strip().lower()
+            capture_source = _capture_source(request.form.get("capture_source", "file"))
+            if capture_source is None:
+                return jsonify({
+                    "success": False,
+                    "error": "capture_source must be file or camera"
                 }), 400
 
             if "file" not in request.files:
@@ -218,11 +342,13 @@ def register_document_vault(app):
 
             # OCR / text extraction
             extracted_text = ""
+            processing_status = "processed"
             try:
                 extracted_text = extract_text(storage_path)
             except Exception as ocr_error:
                 print("OCR WARNING:", ocr_error)
                 extracted_text = ""
+                processing_status = "failed"
 
             now = datetime.utcnow().isoformat()
 
@@ -274,9 +400,12 @@ def register_document_vault(app):
                     created_at,
                     updated_at,
                     document_version,
-                    document_reference
+                    document_reference,
+                    processing_status,
+                    file_size,
+                    capture_source
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     profile_id,
@@ -291,9 +420,15 @@ def register_document_vault(app):
                     now,
                     now,
                     document_version,
-                    document_reference
+                    document_reference,
+                    processing_status,
+                    len(data),
+                    capture_source
                 )
             )
+
+            if document_version > 1:
+                _clear_verified_profile(conn, profile_id)
 
             conn.commit()
             document_id = cursor.lastrowid
@@ -306,7 +441,10 @@ def register_document_vault(app):
                 "filename": file.filename,
                 "doc_type": doc_type,
                 "document_version": document_version,
-                "document_reference": document_reference
+                "document_reference": document_reference,
+                "processing_status": processing_status,
+                "file_size": len(data),
+                "capture_source": capture_source
             })
 
         except Exception as e:
@@ -336,7 +474,10 @@ def register_document_vault(app):
                     created_at,
                     updated_at,
                     document_version,
-                    document_reference
+                    document_reference,
+                    processing_status,
+                    file_size,
+                    capture_source
                 FROM documents
                 WHERE profile_id = ?
                 ORDER BY id DESC
@@ -407,7 +548,7 @@ def register_document_vault(app):
 
             row = conn.execute(
                 """
-                SELECT storage_path
+                SELECT storage_path, profile_id
                 FROM documents
                 WHERE id = ?
                 """,
@@ -428,6 +569,7 @@ def register_document_vault(app):
                 "DELETE FROM documents WHERE id = ?",
                 (document_id,)
             )
+            _clear_verified_profile(conn, row["profile_id"])
 
             conn.commit()
             conn.close()
@@ -463,13 +605,26 @@ button{width:100%;margin-top:15px;padding:13px;background:#146c43;color:#fff;bor
 <form id="uploadForm">
 <label>Profile ID</label><input id="profile_id" type="number" min="1" max="5" value="1" required>
 <label>Document Type</label><input id="doc_type" placeholder="Aadhaar / Marksheet / Other" required>
-<label>Select File</label><input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
+<label>Select File</label><input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png">
+<label>Camera</label><input id="camera" type="file" accept="image/*" capture="environment">
+<img id="preview" alt="Document preview" style="display:none;max-width:100%;margin-top:12px">
 <button type="submit">Upload Document</button>
 </form><p id="message"></p></div>
 <div class="card"><h2>Saved Documents</h2><button onclick="loadDocuments()">Refresh Documents</button><div id="documents"></div></div>
 </div>
 <script>
 const msg=document.getElementById('message'),docs=document.getElementById('documents');
+let captureSource='file';
+function showPreview(input, source){
+ const chosen=input.files[0];
+ if(!chosen)return;
+ captureSource=source;
+ const image=document.getElementById('preview');
+ image.style.display='block';
+ image.src=URL.createObjectURL(chosen);
+}
+document.getElementById('file').onchange=e=>showPreview(e.target,'file');
+document.getElementById('camera').onchange=e=>showPreview(e.target,'camera');
 async function loadDocuments(){
  const id=document.getElementById('profile_id').value||1;
  const r=await fetch('/api/documents/'+id),d=await r.json();
@@ -486,7 +641,10 @@ document.getElementById('uploadForm').onsubmit=async e=>{
  const f=new FormData();
  f.append('profile_id',document.getElementById('profile_id').value);
  f.append('doc_type',document.getElementById('doc_type').value);
- f.append('file',document.getElementById('file').files[0]);
+ f.append('capture_source',captureSource);
+ const camera=document.getElementById('camera').files[0];
+ const chosen=captureSource==='camera'&&camera?camera:document.getElementById('file').files[0];
+ f.append('file',chosen);
  const r=await fetch('/api/documents/upload',{method:'POST',body:f}),d=await r.json();
  msg.textContent=d.message||d.error;
  if(d.success){document.getElementById('file').value='';loadDocuments()}

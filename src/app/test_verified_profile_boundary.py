@@ -227,3 +227,37 @@ def test_matching_unverified_document_cannot_promote_a_verified_profile(
     stored = client.get("/api/profile/1/verified").get_json()
     assert stored["verified"] is False
     assert stored["profile"] is None
+
+
+def test_failed_ocr_document_cannot_promote_even_if_marked_verified(
+    client, tmp_path
+):
+    import sqlite3
+    from app import profile
+
+    profile.save_profile({"name": "Sunil Kumar"}, profile_id=1)
+    _insert_extracted_document(
+        tmp_path / "formbharat.db",
+        1,
+        {"name": "Sunil Kumar"},
+        reference="DOC-FAILED-OCR",
+        verified=1,
+    )
+    conn = sqlite3.connect(tmp_path / "formbharat.db")
+    conn.execute(
+        "UPDATE documents SET processing_status = 'failed' "
+        "WHERE document_reference = 'DOC-FAILED-OCR'"
+    )
+    conn.commit()
+    conn.close()
+
+    response = client.post(
+        "/api/profile/1/verified",
+        json={"confirmed": True, "verified": True},
+    )
+
+    body = response.get_json()
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["verified"] is False
+    assert body["profile"] is None

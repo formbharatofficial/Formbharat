@@ -77,9 +77,16 @@ def verify_profile_documents(profile_data, profile_id, db_path):
     conn.row_factory = sqlite3.Row
 
     try:
+        column_names = {
+            row[1] for row in conn.execute("PRAGMA table_info(documents)")
+        }
+        processing_column = (
+            ", processing_status" if "processing_status" in column_names else ""
+        )
         rows = conn.execute(
-            """
+            f"""
             SELECT id, doc_type, document_reference, extracted_data, verified
+                   {processing_column}
             FROM documents
             WHERE profile_id = ?
             ORDER BY id DESC
@@ -97,13 +104,16 @@ def verify_profile_documents(profile_data, profile_id, db_path):
         except (TypeError, json.JSONDecodeError):
             extracted_data = {}
 
-        documents.append({
+        document = {
             "document_id": row["id"],
             "doc_type": row["doc_type"],
             "document_reference": row["document_reference"],
             "document_verified": bool(row["verified"]),
             "fields": verify_fields(profile_data, extracted_data),
-        })
+        }
+        if "processing_status" in row.keys():
+            document["processing_status"] = row["processing_status"]
+        documents.append(document)
 
     return {
         "profile_id": profile_id,
@@ -185,6 +195,9 @@ def combined_field_results(documents):
             continue
 
         if "document_verified" in document and not document["document_verified"]:
+            continue
+
+        if document.get("processing_status") == "failed":
             continue
 
         fields = document.get("fields")

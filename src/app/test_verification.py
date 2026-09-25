@@ -215,3 +215,23 @@ def test_combined_field_results_reject_unverified_documents():
 
     assert verified["name"]["status"] == "verified"
     assert can_promote_verified_profile(verified) is True
+
+
+def test_failed_processing_cannot_promote_even_when_document_is_marked_verified():
+    from app.verification import combined_field_results, can_promote_verified_profile
+
+    combined = combined_field_results([
+        {
+            "document_verified": True,
+            "processing_status": "failed",
+            "fields": {
+                "name": {
+                    "status": "verified",
+                    "document_value": "Sunil Kumar",
+                },
+            },
+        },
+    ])
+
+    assert "name" not in combined
+    assert can_promote_verified_profile(combined) is False

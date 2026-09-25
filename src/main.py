@@ -59,6 +59,10 @@ from app.vacancy import (
     create_vacancy,
     get_vacancy,
     list_vacancies,
+    update_vacancy,
+    delete_vacancy,
+    create_vacancy_alert,
+    list_vacancy_alerts,
 )
 
 init_vacancy_db()
@@ -85,6 +89,7 @@ def create_vacancy_api():
             application_end=str(data.get("application_end", "")).strip(),
             exam_date=str(data.get("exam_date", "")).strip(),
             official_link=str(data.get("official_link", "")).strip(),
+            source_name=str(data.get("source_name", "")).strip(),
         )
 
         return jsonify({
@@ -110,7 +115,10 @@ def list_vacancies_api():
     try:
         return jsonify({
             "success": True,
-            "vacancies": list_vacancies()
+            "vacancies": list_vacancies(
+                category=request.args.get("category"),
+                status=request.args.get("status"),
+            )
         })
     except Exception as error:
         return jsonify({
@@ -139,6 +147,72 @@ def get_vacancy_api(vacancy_id):
             "success": False,
             "error": str(error)
         }), 500
+
+
+@app.route("/api/vacancies/<int:vacancy_id>", methods=["PUT"])
+def update_vacancy_api(vacancy_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({
+            "success": False,
+            "error": "Invalid or missing JSON data"
+        }), 400
+    try:
+        vacancy = update_vacancy(vacancy_id, **data)
+        if vacancy is None:
+            return jsonify({
+                "success": False,
+                "error": "Vacancy not found"
+            }), 404
+        return jsonify({"success": True, "vacancy": vacancy})
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+@app.route("/api/vacancies/<int:vacancy_id>", methods=["DELETE"])
+def delete_vacancy_api(vacancy_id):
+    if not delete_vacancy(vacancy_id):
+        return jsonify({
+            "success": False,
+            "error": "Vacancy not found"
+        }), 404
+    return jsonify({"success": True, "deleted": True})
+
+
+@app.route("/api/vacancies/<int:vacancy_id>/alerts", methods=["POST"])
+def create_vacancy_alert_api(vacancy_id):
+    from app.profile import profile_exists
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({
+            "success": False,
+            "error": "Invalid or missing JSON data"
+        }), 400
+    if get_vacancy(vacancy_id) is None:
+        return jsonify({
+            "success": False,
+            "error": "Vacancy not found"
+        }), 404
+    try:
+        profile_id = int(data.get("profile_id"))
+        if not profile_exists(profile_id):
+            raise ValueError("profile_id must refer to an existing profile")
+        alert = create_vacancy_alert(profile_id, vacancy_id)
+        return jsonify({"success": True, "alert": alert}), 201
+    except (TypeError, ValueError) as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+@app.route("/api/vacancy-alerts/<int:profile_id>", methods=["GET"])
+def list_vacancy_alerts_api(profile_id):
+    try:
+        return jsonify({
+            "success": True,
+            "alerts": list_vacancy_alerts(profile_id)
+        })
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
 
 
 # --------------------------------------------------

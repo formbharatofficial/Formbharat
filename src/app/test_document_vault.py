@@ -57,6 +57,9 @@ def test_vault_registration_creates_documents_table_for_a_fresh_database(
         "updated_at",
         "document_version",
         "document_reference",
+        "processing_status",
+        "file_size",
+        "capture_source",
     }
 
 
@@ -290,3 +293,213 @@ def test_upload_rejects_invalid_or_non_existing_profile_id(monkeypatch, tmp_path
             "success": False,
             "error": "profile_id must refer to an existing valid profile",
         }
+
+
+def test_camera_upload_is_stored_separately_from_file_upload(monkeypatch, tmp_path):
+    client = _document_client(monkeypatch, tmp_path, saved_profile_ids=(1,))
+
+    response = client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "aadhaar",
+            "capture_source": "camera",
+            "file": (BytesIO(b"camera-bytes"), "aadhaar.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["capture_source"] == "camera"
+    stored = client.get("/api/documents/1").get_json()["documents"][0]
+    assert stored["capture_source"] == "camera"
+
+
+def test_invalid_capture_source_is_rejected(monkeypatch, tmp_path):
+    client = _document_client(monkeypatch, tmp_path, saved_profile_ids=(1,))
+
+    response = client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "aadhaar",
+            "capture_source": "scanner",
+            "file": (BytesIO(b"camera-bytes"), "aadhaar.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert client.get("/api/documents/1").get_json()["count"] == 0
+
+
+def test_preview_does_not_store_a_document(monkeypatch, tmp_path):
+    client = _document_client(monkeypatch, tmp_path, saved_profile_ids=(1,))
+
+    response = client.post(
+        "/api/documents/preview",
+        data={
+            "profile_id": "1",
+            "doc_type": "aadhaar",
+            "capture_source": "camera",
+            "file": (BytesIO(b"preview-bytes"), "aadhaar.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["stored"] is False
+    assert body["preview"]["filename"] == "aadhaar.jpg"
+    assert body["preview"]["capture_source"] == "camera"
+    assert body["preview"]["file_size"] == len(b"preview-bytes")
+    listed = client.get("/api/documents/1").get_json()
+    assert listed["count"] == 0
+
+
+def test_unknown_document_type_is_rejected(monkeypatch, tmp_path):
+    client = _document_client(monkeypatch, tmp_path, saved_profile_ids=(1,))
+
+    response = client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "passport",
+            "file": (BytesIO(b"document content"), "passport.png"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["success"] is False
+
+
+def test_ocr_failure_is_stored_as_failed_processing(monkeypatch, tmp_path):
+    db_path = tmp_path / "formbharat.db"
+    monkeypatch.setattr(document_vault, "DB_PATH", str(db_path))
+    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(tmp_path / "documents"))
+    monkeypatch.setattr(profile, "DB_PATH", db_path)
+
+    def _fail(_path):
+        raise RuntimeError("ocr unavailable")
+
+    monkeypatch.setattr(document_vault, "extract_text", _fail)
+    profile.save_profile({"name": "User 1"}, 1)
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    document_vault.register_document_vault(app)
+    client = app.test_client()
+
+    response = client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "aadhaar",
+            "file": (BytesIO(b"aadhaar bytes"), "aadhaar.png"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["processing_status"] == "failed"
+    stored = client.get("/api/documents/1").get_json()["documents"][0]
+    assert stored["processing_status"] == "failed"
+    assert stored["verified"] == 0
+    assert stored["file_size"] == len(b"aadhaar bytes")
+
+
+def test_deleting_a_document_clears_verified_profile(monkeypatch, tmp_path):
+    client = _document_client(monkeypatch, tmp_path, saved_profile_ids=(1,))
+    db_path = tmp_path / "formbharat.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE verified_profile (
+            profile_id INTEGER PRIMARY KEY,
+            data TEXT NOT NULL,
+            verified INTEGER NOT NULL,
+            verified_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO verified_profile (profile_id, data, verified) VALUES (1, '{}', 1)"
+    )
+    conn.commit()
+    conn.close()
+
+    uploaded = client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "aadhaar",
+            "file": (BytesIO(b"aadhaar bytes"), "aadhaar.png"),
+        },
+        content_type="multipart/form-data",
+    ).get_json()
+
+    deleted = client.delete(f"/api/documents/{uploaded['document_id']}")
+    assert deleted.status_code == 200
+
+    conn = sqlite3.connect(db_path)
+    verified = conn.execute(
+        "SELECT verified FROM verified_profile WHERE profile_id = 1"
+    ).fetchone()[0]
+    conn.close()
+    assert verified == 0
+
+
+def test_replacing_a_document_clears_verified_profile(monkeypatch, tmp_path):
+    client = _document_client(monkeypatch, tmp_path, saved_profile_ids=(1,))
+    db_path = tmp_path / "formbharat.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE verified_profile (
+            profile_id INTEGER PRIMARY KEY,
+            data TEXT NOT NULL,
+            verified INTEGER NOT NULL,
+            verified_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO verified_profile (profile_id, data, verified) VALUES (1, '{}', 1)"
+    )
+    conn.commit()
+    conn.close()
+
+    client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "aadhaar",
+            "file": (BytesIO(b"first aadhaar"), "aadhaar-v1.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE verified_profile SET verified = 1 WHERE profile_id = 1")
+    conn.commit()
+    conn.close()
+
+    second = client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "aadhaar",
+            "file": (BytesIO(b"second aadhaar"), "aadhaar-v2.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert second.status_code == 200
+    assert second.get_json()["document_version"] == 2
+
+    conn = sqlite3.connect(db_path)
+    verified = conn.execute(
+        "SELECT verified FROM verified_profile WHERE profile_id = 1"
+    ).fetchone()[0]
+    conn.close()
+    assert verified == 0

@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -172,6 +173,20 @@ def save_profile(data, profile_id=1):
 
     conn = sqlite3.connect(DB_PATH)
     try:
+        existing = conn.execute(
+            f"SELECT {', '.join(columns[1:])} FROM profile WHERE id = ?",
+            (profile_id,),
+        ).fetchone()
+        if existing is None:
+            changed = _first_save_disagrees_with_verified(
+                conn, profile_id, values
+            )
+        else:
+            changed = any(
+                str(existing[index] or "") != values[field]
+                for index, field in enumerate(columns[1:])
+            )
+
         conn.execute(
             f"""
             INSERT INTO profile ({column_list})
@@ -180,9 +195,42 @@ def save_profile(data, profile_id=1):
             """,
             [profile_id, *(values[field] for field in columns[1:])],
         )
+        if changed and _verified_profile_table_exists(conn):
+            conn.execute(
+                "UPDATE verified_profile SET verified = 0 WHERE profile_id = ?",
+                (profile_id,),
+            )
         conn.commit()
     finally:
         conn.close()
+
+
+def _first_save_disagrees_with_verified(conn, profile_id, values):
+    if not _verified_profile_table_exists(conn):
+        return False
+    row = conn.execute(
+        "SELECT data, verified FROM verified_profile WHERE profile_id = ?",
+        (profile_id,),
+    ).fetchone()
+    if row is None or row[1] != 1:
+        return False
+    try:
+        stored = json.loads(row[0] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return True
+    if not isinstance(stored, dict):
+        return True
+    return any(
+        str(stored.get(field, "") or "").strip() != new_value
+        for field, new_value in values.items()
+    )
+
+
+def _verified_profile_table_exists(conn):
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='verified_profile'"
+    ).fetchone()
+    return row is not None
 
 
 def get_profile(profile_id=1):
