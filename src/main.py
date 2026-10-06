@@ -1357,6 +1357,48 @@ async function analyzeForm() {
 
 
 # --------------------------------------------------
+# Mobile navigation
+# Shared by /, /test-form, /profile, and /documents.
+# --------------------------------------------------
+
+_MOBILE_NAV_PATHS = {"/", "/test-form", "/profile", "/documents"}
+
+_MOBILE_NAV = """
+<nav class="fb-nav" aria-label="FormBharat">
+<a href="/profile">Profile</a>
+<a href="/documents">Documents</a>
+<a href="/">Form</a>
+</nav>
+<style>
+.fb-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.fb-nav a{flex:1 1 30%;min-width:6.5rem;box-sizing:border-box;text-align:center;padding:12px 8px;background:#146c43;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px}
+</style>
+"""
+
+
+def _inject_mobile_nav(html):
+    if 'class="fb-nav"' in html:
+        return html
+    start = html.lower().find("<body")
+    if start < 0:
+        return html
+    end = html.find(">", start)
+    if end < 0:
+        return html
+    return html[:end + 1] + _MOBILE_NAV + html[end + 1:]
+
+
+@app.after_request
+def add_mobile_nav(response):
+    if request.path not in _MOBILE_NAV_PATHS or response.status_code != 200:
+        return response
+    if response.mimetype != "text/html":
+        return response
+    response.set_data(_inject_mobile_nav(response.get_data(as_text=True)))
+    return response
+
+
+# --------------------------------------------------
 # Home
 # --------------------------------------------------
 
