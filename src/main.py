@@ -541,6 +541,19 @@ pre {
 
 <h2>AI Form Filling Test</h2>
 
+<label for="profile_id">
+Profile ID
+</label>
+
+<input
+    id="profile_id"
+    name="profile_id"
+    type="number"
+    min="1"
+    max="5"
+    inputmode="numeric"
+>
+
 <form id="testForm">
 
 <label for="full_name">
@@ -640,17 +653,100 @@ FormBharat ready to analyze this form.
 
 <script>
 
+function showStatus(text) {
+
+    document.getElementById("status").textContent = text;
+
+}
+
+function showResultText(text) {
+
+    const result = document.getElementById("result");
+
+    result.replaceChildren();
+
+    const pre = document.createElement("pre");
+
+    pre.textContent = text;
+
+    result.appendChild(pre);
+
+}
+
+function showAnalysisResult(resultData) {
+
+    const result = document.getElementById("result");
+
+    result.replaceChildren();
+
+    function addLine(label, value) {
+
+        const strong = document.createElement("strong");
+
+        strong.textContent = label;
+
+        result.appendChild(strong);
+
+        result.appendChild(
+            document.createTextNode(" " + value)
+        );
+
+        result.appendChild(document.createElement("br"));
+
+        result.appendChild(document.createElement("br"));
+
+    }
+
+    addLine(
+        "Fields detected:",
+        String(resultData.fields_detected)
+    );
+
+    addLine(
+        "Fields filled:",
+        String(resultData.filled_count || 0)
+    );
+
+    addLine(
+        "Fields skipped:",
+        String(resultData.skipped_count || 0)
+    );
+
+    const pre = document.createElement("pre");
+
+    pre.textContent = JSON.stringify(
+        resultData.filled || [],
+        null,
+        2
+    );
+
+    result.appendChild(pre);
+
+}
+
 async function analyzeAndFill() {
 
     const form = document.getElementById("testForm");
 
     const html = form.outerHTML;
 
-    document.getElementById("status").innerHTML =
-        "🤖 FormBharat analyzing fields...";
+    const profileId = document.getElementById("profile_id").value.trim();
 
-    document.getElementById("result").innerHTML =
-        "";
+    if (!/^[1-5]$/.test(profileId)) {
+
+        showStatus("❌ Error");
+
+        showResultText(
+            "profile_id must be an integer between 1 and 5"
+        );
+
+        return;
+
+    }
+
+    showStatus("🤖 FormBharat analyzing fields...");
+
+    document.getElementById("result").replaceChildren();
 
     try {
 
@@ -663,7 +759,8 @@ async function analyzeAndFill() {
             },
 
             body: JSON.stringify({
-                html: html
+                html: html,
+                profile_id: Number(profileId)
             })
 
         });
@@ -735,41 +832,17 @@ async function analyzeAndFill() {
             );
         }
 
-        document.getElementById("status").innerHTML =
-            "✅ Form analyzed and filled successfully";
+        showStatus("✅ Form analyzed and filled successfully");
 
-        document.getElementById("result").innerHTML =
-            "<b>Fields detected:</b> " +
-            result.fields_detected +
-            "<br><br>" +
-
-            "<b>Fields filled:</b> " +
-            (result.filled_count || 0) +
-            "<br><br>" +
-
-            "<b>Fields skipped:</b> " +
-            (result.skipped_count || 0) +
-            "<br><br>" +
-
-            "<pre>" +
-            JSON.stringify(
-                result.filled || [],
-                null,
-                2
-            ) +
-            "</pre>";
+        showAnalysisResult(result);
 
     }
 
     catch (error) {
 
-        document.getElementById("status").innerHTML =
-            "❌ Error";
+        showStatus("❌ Error");
 
-        document.getElementById("result").innerHTML =
-            "<pre>" +
-            error +
-            "</pre>";
+        showResultText(String(error));
 
     }
 
@@ -920,6 +993,21 @@ PAGE = """
 
         <h2>Test Form</h2>
 
+        <label for="profile_id">
+            Profile ID
+        </label>
+
+        <input
+            id="profile_id"
+            name="profile_id"
+            type="number"
+            min="1"
+            max="5"
+            inputmode="numeric"
+        >
+
+        <form id="rootForm">
+
         <label for="name">
             Full Name
         </label>
@@ -970,8 +1058,9 @@ PAGE = """
             placeholder="Enter address"
         >
 
+        </form>
 
-        <button onclick="analyzeForm()">
+        <button type="button" onclick="analyzeForm()">
             Analyze Form
         </button>
 
@@ -995,34 +1084,65 @@ PAGE = """
 
 <script>
 
+function showRootStatus(className, text) {
+
+    const status = document.getElementById("status");
+
+    status.replaceChildren();
+
+    if (!className) {
+
+        status.textContent = text;
+
+        return;
+
+    }
+
+    const span = document.createElement("span");
+
+    span.className = className;
+
+    span.textContent = text;
+
+    status.appendChild(span);
+
+}
+
+function showRootResult(text) {
+
+    const result = document.getElementById("result");
+
+    result.replaceChildren();
+
+    const pre = document.createElement("pre");
+
+    pre.textContent = text;
+
+    result.appendChild(pre);
+
+}
+
 async function analyzeForm() {
 
-    const profile = {
+    const profileId = document.getElementById("profile_id").value.trim();
 
-        name:
-            document.getElementById("name").value,
+    if (!/^[1-5]$/.test(profileId)) {
 
-        email:
-            document.getElementById("email").value,
+        showRootStatus("error", "Error");
 
-        mobile:
-            document.getElementById("mobile").value,
+        showRootResult(
+            "profile_id must be an integer between 1 and 5"
+        );
 
-        dob:
-            document.getElementById("dob").value,
+        return;
 
-        address:
-            document.getElementById("address").value
-    };
+    }
 
+    const html = document.getElementById("rootForm").outerHTML;
 
-    document.getElementById("status").innerHTML =
-        "AI analyzing form...";
+    showRootStatus("", "AI analyzing form...");
 
-
-    document.getElementById("result").innerHTML =
-        "";
-
+    document.getElementById("result").replaceChildren();
 
     try {
 
@@ -1035,7 +1155,8 @@ async function analyzeForm() {
             },
 
             body: JSON.stringify({
-                profile: profile
+                html: html,
+                profile_id: Number(profileId)
             })
         });
 
@@ -1045,27 +1166,24 @@ async function analyzeForm() {
 
         if (data.success) {
 
-            document.getElementById("status").innerHTML =
-                '<span class="success">Analysis successful ✓</span>';
+            showRootStatus(
+                "success",
+                "Analysis successful ✓"
+            );
 
-
-            document.getElementById("result").innerHTML =
-                "<pre>" +
-                JSON.stringify(data.result, null, 2) +
-                "</pre>";
+            showRootResult(
+                JSON.stringify(data.result, null, 2)
+            );
 
         }
 
         else {
 
-            document.getElementById("status").innerHTML =
-                '<span class="error">Error</span>';
+            showRootStatus("error", "Error");
 
-
-            document.getElementById("result").innerHTML =
-                "<pre>" +
-                JSON.stringify(data, null, 2) +
-                "</pre>";
+            showRootResult(
+                JSON.stringify(data, null, 2)
+            );
         }
 
 
@@ -1073,14 +1191,9 @@ async function analyzeForm() {
 
     catch (error) {
 
-        document.getElementById("status").innerHTML =
-            '<span class="error">Server error</span>';
+        showRootStatus("error", "Server error");
 
-
-        document.getElementById("result").innerHTML =
-            "<pre>" +
-            error +
-            "</pre>";
+        showRootResult(String(error));
     }
 
 }
@@ -1121,12 +1234,28 @@ def health():
 # Analyze
 # --------------------------------------------------
 
+MAX_ANALYZE_HTML_BYTES = 1_000_000
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
 
     try:
 
         data = request.get_json(silent=True) or {}
+
+        html = data.get("html")
+        if not isinstance(html, str) or not html.strip():
+            return jsonify({
+                "success": False,
+                "error": "html must be a non-empty string"
+            }), 400
+
+        if len(html.encode("utf-8")) > MAX_ANALYZE_HTML_BYTES:
+            return jsonify({
+                "success": False,
+                "error": "html exceeds the maximum size"
+            }), 400
 
         # Bible boundary:
         # Raw Profile must never be used for form filling.
@@ -1143,8 +1272,6 @@ def analyze():
 
         profile = get_verified_profile(profile_id)
 
-        html = data.get("html", "")
-
         result = {
             "message": "Form received successfully.",
             "profile": profile,
@@ -1156,88 +1283,80 @@ def analyze():
         # HTML → Reader → Analyzer → Profile Matcher
         # --------------------------------------------------
 
-        if html:
+        if FormReader is None:
+            raise RuntimeError("FormReader unavailable")
 
-            if FormReader is None:
-                raise RuntimeError("FormReader unavailable")
+        if FieldAnalyzer is None:
+            raise RuntimeError("FieldAnalyzer unavailable")
 
-            if FieldAnalyzer is None:
-                raise RuntimeError("FieldAnalyzer unavailable")
+        if match_profile_to_fields is None:
+            raise RuntimeError("Profile Matcher unavailable")
 
-            if match_profile_to_fields is None:
-                raise RuntimeError("Profile Matcher unavailable")
+        reader = FormReader()
+        analyzer = FieldAnalyzer()
 
-            reader = FormReader()
-            analyzer = FieldAnalyzer()
+        fields = reader.read(html)
 
-            fields = reader.read(html)
+        analyzed_fields = analyzer.analyze(fields)
 
-            analyzed_fields = analyzer.analyze(fields)
+        # --------------------------------------------------
+        # AI MATCHER
+        # Field meaning + safety classification
+        # --------------------------------------------------
 
-            # --------------------------------------------------
-            # AI MATCHER
-            # Field meaning + safety classification
-            # --------------------------------------------------
+        if AIMatcher is None:
+            raise RuntimeError("AI Matcher unavailable")
 
-            if AIMatcher is None:
-                raise RuntimeError("AI Matcher unavailable")
+        ai_matcher = AIMatcher()
 
-            ai_matcher = AIMatcher()
+        for field in analyzed_fields:
 
-            for field in analyzed_fields:
+            if not isinstance(field, dict):
+                continue
 
-                if not isinstance(field, dict):
-                    continue
+            ai_text = " ".join([
+                str(field.get("label") or ""),
+                str(field.get("name") or ""),
+                str(field.get("id") or ""),
+                str(field.get("placeholder") or "")
+            ]).strip()
 
-                ai_text = " ".join([
-                    str(field.get("label") or ""),
-                    str(field.get("name") or ""),
-                    str(field.get("id") or ""),
-                    str(field.get("placeholder") or "")
-                ]).strip()
+            ai_result = ai_matcher.match(ai_text)
 
-                ai_result = ai_matcher.match(ai_text)
+            field["ai_purpose"] = ai_result.get("purpose")
+            field["ai_confidence"] = ai_result.get("confidence")
+            field["ai_blocked"] = ai_result.get("blocked", False)
 
-                field["ai_purpose"] = ai_result.get("purpose")
-                field["ai_confidence"] = ai_result.get("confidence")
-                field["ai_blocked"] = ai_result.get("blocked", False)
+            if ai_result.get("reason"):
+                field["ai_block_reason"] = ai_result["reason"]
 
-                if ai_result.get("reason"):
-                    field["ai_block_reason"] = ai_result["reason"]
+        matched_fields = match_profile_to_fields(
+            analyzed_fields,
+            profile
+        )
 
-            matched_fields = match_profile_to_fields(
-                analyzed_fields,
-                profile
-            )
+        result["fields_detected"] = len(fields)
+        result["fields"] = analyzed_fields
+        result["matched_fields"] = matched_fields
 
-            result["fields_detected"] = len(fields)
-            result["fields"] = analyzed_fields
-            result["matched_fields"] = matched_fields
+        # --------------------------------------------------
+        # FILL ENGINE
+        # Matched profile values → HTML form
+        # --------------------------------------------------
 
-            # --------------------------------------------------
-            # FILL ENGINE
-            # Matched profile values → HTML form
-            # --------------------------------------------------
+        if fill_form is None:
+            raise RuntimeError("Fill Engine unavailable")
 
-            if fill_form is None:
-                raise RuntimeError("Fill Engine unavailable")
+        fill_result = fill_form(
+            html,
+            matched_fields
+        )
 
-            fill_result = fill_form(
-                html,
-                matched_fields
-            )
-
-            result["filled_html"] = fill_result["html"]
-            result["filled"] = fill_result["filled"]
-            result["skipped"] = fill_result["skipped"]
-            result["filled_count"] = fill_result["filled_count"]
-            result["skipped_count"] = fill_result["skipped_count"]
-
-        else:
-
-            result["fields_detected"] = 0
-            result["fields"] = []
-            result["matched_fields"] = []
+        result["filled_html"] = fill_result["html"]
+        result["filled"] = fill_result["filled"]
+        result["skipped"] = fill_result["skipped"]
+        result["filled_count"] = fill_result["filled_count"]
+        result["skipped_count"] = fill_result["skipped_count"]
 
         # --------------------------------------------------
         # Existing AI engine

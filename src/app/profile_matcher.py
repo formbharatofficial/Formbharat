@@ -63,9 +63,43 @@ def match_profile_to_fields(fields, profile):
         ],
 
         "country": [
-            "country",
+            "country"
+        ],
+
+        "nationality": [
             "nationality"
+        ],
+
+        "gender": [
+            "gender",
+            "sex"
+        ],
+
+        "category": [
+            "category",
+            "caste"
+        ],
+
+        "state": [
+            "state"
+        ],
+
+        "district": [
+            "district"
+        ],
+
+        "pincode": [
+            "pincode",
+            "pin_code",
+            "zip",
+            "zipcode",
+            "zip_code"
         ]
+
+        # age is intentionally absent so it cannot receive dob.
+        # education and qualification are intentionally absent: the profile
+        # stores separate tenth, twelfth, graduation, diploma, and
+        # other_qualification values, and none of those is a generic degree.
     }
 
     # Fields which must NEVER be automatically matched.
@@ -215,9 +249,6 @@ def match_profile_to_fields(fields, profile):
                     "permanent address",
                     "residential address",
                     "present address"
-                ],
-                "country": [
-                    "nationality"
                 ]
             }
 
