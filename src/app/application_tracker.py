@@ -1,11 +1,11 @@
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 
 from app.profile import MAX_PROFILES
+from app.runtime_config import database_path
 
 
-DB_PATH = Path(__file__).resolve().parents[2] / "formbharat.db"
+DB_PATH = database_path()
 
 APPLICATION_STATUSES = (
     "draft",

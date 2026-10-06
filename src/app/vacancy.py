@@ -1,8 +1,9 @@
 import sqlite3
-from pathlib import Path
 from datetime import date, datetime, timezone
 
-DB_PATH = Path(__file__).resolve().parents[2] / "formbharat.db"
+from app.runtime_config import database_path
+
+DB_PATH = database_path()
 
 
 def _connect():

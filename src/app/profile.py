@@ -1,9 +1,10 @@
 import json
 import sqlite3
-from pathlib import Path
+
+from app.runtime_config import database_path
 
 
-DB_PATH = Path(__file__).resolve().parents[2] / "formbharat.db"
+DB_PATH = database_path()
 MAX_PROFILES = 5
 
 PROFILE_FIELDS = (

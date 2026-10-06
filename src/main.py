@@ -494,11 +494,13 @@ def upload_profile_media(profile_id, media_type):
         conn.close()
 
 
-from app.document_vault import (
-    register_document_vault,
-    register_document_vault_ui,
-    DB_PATH as DOCUMENTS_DB_PATH,
-)
+import app.document_vault as document_vault
+from app.runtime_config import apply_document_vault_paths
+
+apply_document_vault_paths(document_vault)
+register_document_vault = document_vault.register_document_vault
+register_document_vault_ui = document_vault.register_document_vault_ui
+DOCUMENTS_DB_PATH = document_vault.DB_PATH
 register_document_vault(app)
 register_document_vault_ui(app)
 
@@ -1895,21 +1897,39 @@ def test_form():
 # Application start
 # --------------------------------------------------
 
-if __name__ == "__main__":
+def serve():
+    from app.runtime_config import load_settings
 
+    settings = load_settings()
+    if settings["production"]:
+        app.config["DEBUG"] = False
+        app.config["PROPAGATE_EXCEPTIONS"] = False
+        from waitress import serve as waitress_serve
+
+        waitress_serve(app, host=settings["host"], port=settings["port"])
+        return
+
+    app.run(
+        host=settings["host"],
+        port=settings["port"],
+        debug=True,
+    )
+
+
+if __name__ == "__main__":
+    from app.runtime_config import load_settings
+
+    settings = load_settings()
     print("")
     print("================================")
     print(" FormBharat Server")
     print("================================")
-    print("Home   : http://127.0.0.1:5000/")
-    print("Health : http://127.0.0.1:5000/health")
+    print(f"Mode   : {settings['environment']}")
+    print(f"Home   : http://127.0.0.1:{settings['port']}/")
+    print(f"Health : http://127.0.0.1:{settings['port']}/health")
     print("Analyze: POST /analyze")
     print("================================")
     print("")
 
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True
-    )
+    serve()
 
