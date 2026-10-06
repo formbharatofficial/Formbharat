@@ -67,6 +67,18 @@ from app.vacancy import (
 
 init_vacancy_db()
 
+from app.application_tracker import (
+    init_application_tracker_db,
+    create_application,
+    get_application,
+    list_applications,
+    update_application_status,
+    list_application_history,
+)
+from app.profile import profile_exists
+
+init_application_tracker_db()
+
 
 @app.route("/api/vacancies", methods=["POST"])
 def create_vacancy_api():
@@ -210,6 +222,144 @@ def list_vacancy_alerts_api(profile_id):
         return jsonify({
             "success": True,
             "alerts": list_vacancy_alerts(profile_id)
+        })
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+# --------------------------------------------------
+# Phase 7 Application Tracker
+# --------------------------------------------------
+
+def _require_saved_profile(profile_id):
+    if not profile_exists(profile_id):
+        raise ValueError("profile_id must refer to an existing profile")
+
+
+def _vacancy_id_for_application(data):
+    if data.get("vacancy_id") in (None, ""):
+        return None
+    vacancy_id = data.get("vacancy_id")
+    if isinstance(vacancy_id, bool) or not isinstance(vacancy_id, int) or vacancy_id < 1:
+        raise ValueError("vacancy_id must be a positive integer")
+    if get_vacancy(vacancy_id) is None:
+        raise LookupError("Vacancy not found")
+    return vacancy_id
+
+
+def _application_for_profile(profile_id, application_id):
+    _require_saved_profile(profile_id)
+    item = get_application(application_id)
+    if item is None or item["profile_id"] != profile_id:
+        return None
+    return item
+
+
+@app.route("/api/applications", methods=["POST"])
+def create_application_api():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({
+            "success": False,
+            "error": "Invalid or missing JSON data"
+        }), 400
+    try:
+        profile_id = int(data.get("profile_id"))
+        _require_saved_profile(profile_id)
+        vacancy_id = _vacancy_id_for_application(data)
+        application = create_application(
+            profile_id,
+            str(data.get("title", "")).strip(),
+            organization=str(data.get("organization", "")).strip(),
+            vacancy_id=vacancy_id,
+            status=data.get("status") or "draft",
+            note=str(data.get("note", "")).strip(),
+        )
+        return jsonify({"success": True, "application": application}), 201
+    except LookupError as error:
+        return jsonify({"success": False, "error": str(error)}), 404
+    except (TypeError, ValueError) as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+@app.route("/api/applications/<int:profile_id>", methods=["GET"])
+def list_applications_api(profile_id):
+    try:
+        _require_saved_profile(profile_id)
+        status = request.args.get("status")
+        if status == "":
+            status = None
+        return jsonify({
+            "success": True,
+            "applications": list_applications(profile_id, status=status),
+        })
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+@app.route(
+    "/api/applications/<int:profile_id>/<int:application_id>",
+    methods=["GET"],
+)
+def get_application_api(profile_id, application_id):
+    try:
+        application = _application_for_profile(profile_id, application_id)
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+    if application is None:
+        return jsonify({
+            "success": False,
+            "error": "Application not found"
+        }), 404
+    return jsonify({"success": True, "application": application})
+
+
+@app.route(
+    "/api/applications/<int:profile_id>/<int:application_id>",
+    methods=["PUT"],
+)
+def update_application_status_api(profile_id, application_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({
+            "success": False,
+            "error": "Invalid or missing JSON data"
+        }), 400
+    try:
+        if _application_for_profile(profile_id, application_id) is None:
+            return jsonify({
+                "success": False,
+                "error": "Application not found"
+            }), 404
+        application = update_application_status(
+            application_id,
+            data.get("status"),
+            note=str(data.get("note", "")).strip(),
+        )
+        if application is None:
+            return jsonify({
+                "success": False,
+                "error": "Application not found"
+            }), 404
+        return jsonify({"success": True, "application": application})
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+@app.route(
+    "/api/applications/<int:profile_id>/<int:application_id>/history",
+    methods=["GET"],
+)
+def application_history_api(profile_id, application_id):
+    try:
+        if _application_for_profile(profile_id, application_id) is None:
+            return jsonify({
+                "success": False,
+                "error": "Application not found"
+            }), 404
+        return jsonify({
+            "success": True,
+            "history": list_application_history(application_id),
         })
     except ValueError as error:
         return jsonify({"success": False, "error": str(error)}), 400
