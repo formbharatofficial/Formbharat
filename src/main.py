@@ -264,7 +264,7 @@ def create_application_api():
             "error": "Invalid or missing JSON data"
         }), 400
     try:
-        profile_id = int(data.get("profile_id"))
+        profile_id = data.get("profile_id")
         _require_saved_profile(profile_id)
         vacancy_id = _vacancy_id_for_application(data)
         application = create_application(

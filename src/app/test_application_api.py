@@ -32,6 +32,29 @@ def _client(tmp_path, monkeypatch):
     return _load_app(), vacancy_id
 
 
+def test_application_api_rejects_coerced_profile_ids(tmp_path, monkeypatch):
+    client, _vacancy_id = _client(tmp_path, monkeypatch)
+
+    for profile_id in (True, False, 1.9):
+        response = client.post(
+            "/api/applications",
+            json={"profile_id": profile_id, "title": "Exam"},
+        )
+        assert response.status_code == 400
+        body = response.get_json()
+        assert body["success"] is False
+        assert "profile_id" in body["error"]
+        assert "integer" in body["error"]
+
+    created = client.post(
+        "/api/applications",
+        json={"profile_id": 1, "title": "Valid Integer Profile"},
+    )
+    assert created.status_code == 201
+    assert created.get_json()["application"]["profile_id"] == 1
+    assert created.get_json()["application"]["title"] == "Valid Integer Profile"
+
+
 def test_application_api_rejects_missing_json_invalid_profile_and_unknown_records(
     tmp_path, monkeypatch
 ):
