@@ -1077,9 +1077,31 @@ PAGE = """
         input,
         select {
             width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
             padding: 13px;
             border: 1px solid #ccc;
             border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .actions a {
+            flex: 1 1 30%;
+            min-width: 6.5rem;
+            box-sizing: border-box;
+            text-align: center;
+            padding: 12px 8px;
+            background: #146c43;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
             font-size: 16px;
         }
 
@@ -1136,6 +1158,17 @@ PAGE = """
 
     <div class="subtitle">
         AI Assisted Form Filling
+    </div>
+
+    <div class="card">
+        <h2>Dashboard</h2>
+        <div class="actions">
+            <a href="/profile">Profile</a>
+            <a href="/documents">Documents</a>
+            <a href="/vacancies">Vacancies</a>
+            <a href="/applications">Applications</a>
+            <a href="/test-form">Form Filling</a>
+        </div>
     </div>
 
 
@@ -1358,19 +1391,28 @@ async function analyzeForm() {
 
 # --------------------------------------------------
 # Mobile navigation
-# Shared by /, /test-form, /profile, and /documents.
+# Shared by the existing pages and the read-only Vacancy and Application pages.
 # --------------------------------------------------
 
-_MOBILE_NAV_PATHS = {"/", "/test-form", "/profile", "/documents"}
+_MOBILE_NAV_PATHS = {
+    "/",
+    "/test-form",
+    "/profile",
+    "/documents",
+    "/vacancies",
+    "/applications",
+}
 
 _MOBILE_NAV = """
 <nav class="fb-nav" aria-label="FormBharat">
 <a href="/profile">Profile</a>
 <a href="/documents">Documents</a>
+<a href="/vacancies">Vacancies</a>
+<a href="/applications">Applications</a>
 <a href="/">Form</a>
 </nav>
 <style>
-.fb-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.fb-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 auto 16px;max-width:700px}
 .fb-nav a{flex:1 1 30%;min-width:6.5rem;box-sizing:border-box;text-align:center;padding:12px 8px;background:#146c43;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px}
 </style>
 """
@@ -1406,6 +1448,237 @@ def add_mobile_nav(response):
 def home():
 
     return render_template_string(PAGE)
+
+
+VACANCIES_PAGE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FormBharat Vacancies</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f7f6;margin:0;padding:20px}
+.container{max-width:700px;margin:auto}
+h1{color:#146c43}
+.card{background:#fff;padding:16px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-wrap:anywhere}
+button{width:100%;padding:14px;background:#146c43;color:#fff;border:0;border-radius:8px;font-size:16px;font-weight:bold}
+a{color:#146c43}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Vacancies</h1>
+<button type="button" id="refresh">Refresh</button>
+<p id="vacancy-message">Loading vacancies...</p>
+<div id="vacancy-list"></div>
+</div>
+<script>
+function addLine(parent, label, value) {
+    if (value === null || value === undefined || String(value).trim() === "") {
+        return;
+    }
+    const line = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = label;
+    line.appendChild(strong);
+    line.appendChild(document.createTextNode(" " + value));
+    parent.appendChild(line);
+}
+
+function renderVacancy(item) {
+    const card = document.createElement("article");
+    card.className = "card";
+    const title = document.createElement("h2");
+    title.textContent = item.title || "Vacancy";
+    card.appendChild(title);
+    addLine(card, "Organization:", item.organization);
+    addLine(card, "Category:", item.category);
+    addLine(card, "Eligibility:", item.eligibility);
+    addLine(card, "Details:", item.description);
+    addLine(card, "Opens:", item.application_start);
+    addLine(card, "Deadline:", item.application_end);
+    addLine(card, "Exam date:", item.exam_date);
+    addLine(card, "Status:", item.status);
+    addLine(card, "Source:", item.source_name);
+    const link = String(item.official_link || "");
+    if (link.startsWith("https://") || link.startsWith("http://")) {
+        const anchor = document.createElement("a");
+        anchor.href = link;
+        anchor.textContent = "Official link";
+        card.appendChild(anchor);
+    }
+    return card;
+}
+
+async function loadVacancies() {
+    const message = document.getElementById("vacancy-message");
+    const list = document.getElementById("vacancy-list");
+    list.replaceChildren();
+    message.textContent = "Loading vacancies...";
+    try {
+        const response = await fetch("/api/vacancies");
+        const data = await response.json();
+        if (!data.success) {
+            message.textContent = data.error || "Could not load vacancies.";
+            return;
+        }
+        const vacancies = data.vacancies || [];
+        if (!vacancies.length) {
+            message.textContent = "No vacancies saved yet.";
+            return;
+        }
+        message.textContent = "";
+        vacancies.forEach(function(item) {
+            list.appendChild(renderVacancy(item));
+        });
+    } catch (error) {
+        message.textContent = "Could not load vacancies.";
+    }
+}
+
+document.getElementById("refresh").onclick = loadVacancies;
+loadVacancies();
+</script>
+</body>
+</html>
+"""
+
+
+APPLICATIONS_PAGE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FormBharat Applications</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f7f6;margin:0;padding:20px}
+.container{max-width:700px;margin:auto}
+h1{color:#146c43}
+label{display:block;margin-top:14px;margin-bottom:6px;font-weight:bold}
+input,button{width:100%;max-width:100%;box-sizing:border-box;padding:13px;border-radius:8px;font-size:16px}
+input{border:1px solid #ccc}
+button{margin-top:12px;background:#146c43;color:#fff;border:0;font-weight:bold}
+.card{background:#fff;padding:16px;margin-top:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Applications</h1>
+<label for="profile_id">Profile ID</label>
+<input id="profile_id" type="number" min="1" max="5" inputmode="numeric">
+<button type="button" id="load">Show applications</button>
+<p id="application-message">Enter a profile ID to view applications.</p>
+<div id="application-list"></div>
+</div>
+<script>
+function addLine(parent, label, value) {
+    if (value === null || value === undefined || String(value).trim() === "") {
+        return;
+    }
+    const line = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = label;
+    line.appendChild(strong);
+    line.appendChild(document.createTextNode(" " + value));
+    parent.appendChild(line);
+}
+
+function renderHistory(history) {
+    const block = document.createElement("div");
+    const heading = document.createElement("h3");
+    heading.textContent = "History";
+    block.appendChild(heading);
+    if (!history.length) {
+        const empty = document.createElement("p");
+        empty.textContent = "No status history.";
+        block.appendChild(empty);
+        return block;
+    }
+    history.forEach(function(entry) {
+        const line = document.createElement("p");
+        let text = entry.status || "";
+        if (entry.note) {
+            text += " — " + entry.note;
+        }
+        if (entry.created_at) {
+            text += " (" + entry.created_at + ")";
+        }
+        line.textContent = text;
+        block.appendChild(line);
+    });
+    return block;
+}
+
+function renderApplication(item, history) {
+    const card = document.createElement("article");
+    card.className = "card";
+    const title = document.createElement("h2");
+    title.textContent = item.title || "Application";
+    card.appendChild(title);
+    addLine(card, "Organization:", item.organization);
+    addLine(card, "Status:", item.status);
+    addLine(card, "Vacancy:", item.vacancy_id);
+    addLine(card, "Updated:", item.updated_at);
+    card.appendChild(renderHistory(history));
+    return card;
+}
+
+async function loadApplications() {
+    const message = document.getElementById("application-message");
+    const list = document.getElementById("application-list");
+    const profileId = document.getElementById("profile_id").value.trim();
+    list.replaceChildren();
+    if (!/^[1-5]$/.test(profileId)) {
+        message.textContent = "profile_id must be an integer between 1 and 5";
+        return;
+    }
+    message.textContent = "Loading applications...";
+    try {
+        const response = await fetch("/api/applications/" + profileId);
+        const data = await response.json();
+        if (!data.success) {
+            message.textContent = data.error || "Could not load applications.";
+            return;
+        }
+        const applications = data.applications || [];
+        if (!applications.length) {
+            message.textContent = "No applications saved yet.";
+            return;
+        }
+        message.textContent = "";
+        for (const item of applications) {
+            let history = [];
+            const historyResponse = await fetch(
+                "/api/applications/" + profileId + "/" + item.id + "/history"
+            );
+            const historyData = await historyResponse.json();
+            if (historyData.success) {
+                history = historyData.history || [];
+            }
+            list.appendChild(renderApplication(item, history));
+        }
+    } catch (error) {
+        message.textContent = "Could not load applications.";
+    }
+}
+
+document.getElementById("load").onclick = loadApplications;
+</script>
+</body>
+</html>
+"""
+
+
+@app.route("/vacancies")
+def vacancies_page():
+    return VACANCIES_PAGE
+
+
+@app.route("/applications")
+def applications_page():
+    return APPLICATIONS_PAGE
 
 
 # --------------------------------------------------
