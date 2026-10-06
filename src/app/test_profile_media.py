@@ -33,15 +33,15 @@ def _client(monkeypatch, tmp_path):
 def test_photo_and_signature_are_separate_media_types(monkeypatch, tmp_path):
     client = _client(monkeypatch, tmp_path)
 
-    for media_type, filename in [
-        ("photo", "photo.jpg"),
-        ("signature", "signature.png"),
+    for media_type, filename, content in [
+        ("photo", "photo.jpg", b"\xff\xd8\xff" + b"test-media"),
+        ("signature", "signature.png", b"\x89PNG\r\n\x1a\n" + b"test-media"),
     ]:
         response = client.post(
             f"/api/profile/1/media/{media_type}",
             data={
                 "file": (
-                    BytesIO(b"test-media"),
+                    BytesIO(content),
                     filename,
                     "image/jpeg" if filename.endswith(".jpg")
                     else "image/png",

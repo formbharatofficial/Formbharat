@@ -159,11 +159,82 @@ def _capture_source(value):
     return None
 
 
+_FILE_SIGNATURES = {
+    "pdf": b"%PDF-",
+    "jpg": b"\xff\xd8\xff",
+    "jpeg": b"\xff\xd8\xff",
+    "png": b"\x89PNG\r\n\x1a\n",
+}
+
+
 def allowed_file(filename):
-    return (
-        "." in filename
-        and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-    )
+    name = str(filename or "")
+    if (
+        not name
+        or name != os.path.basename(name)
+        or "\x00" in name
+        or ".." in name
+    ):
+        return False
+    if "." not in name:
+        return False
+    extension = name.rsplit(".", 1)[1].lower()
+    return extension in ALLOWED_EXTENSIONS
+
+
+def file_contents_match(filename, data):
+    """Return whether the bytes match the filename's PDF, JPEG, or PNG signature."""
+    if not allowed_file(filename) or not isinstance(data, (bytes, bytearray)):
+        return False
+    extension = str(filename).rsplit(".", 1)[1].lower()
+    signature = _FILE_SIGNATURES.get(extension)
+    return bool(signature) and bytes(data).startswith(signature)
+
+
+def _query_profile_id():
+    raw = request.args.get("profile_id")
+    if raw is None or str(raw).strip() == "":
+        return None, (
+            jsonify({
+                "success": False,
+                "error": "profile_id is required",
+            }),
+            400,
+        )
+    text = str(raw).strip()
+    if not text.isdigit():
+        return None, (
+            jsonify({
+                "success": False,
+                "error": "profile_id must be an integer between 1 and 5",
+            }),
+            400,
+        )
+    profile_id = int(text)
+    if not 1 <= profile_id <= 5:
+        return None, (
+            jsonify({
+                "success": False,
+                "error": "profile_id must be an integer between 1 and 5",
+            }),
+            400,
+        )
+    return profile_id, None
+
+
+def _path_inside_storage(storage_path):
+    if not storage_path:
+        return None
+    root = os.path.realpath(STORAGE_DIR)
+    candidate = os.path.realpath(storage_path)
+    try:
+        if os.path.commonpath([root, candidate]) != root:
+            return None
+    except ValueError:
+        return None
+    if not os.path.isfile(candidate):
+        return None
+    return candidate
 
 
 
@@ -244,6 +315,11 @@ def register_document_vault(app):
                     "success": False,
                     "error": "Maximum file size is 10 MB"
                 }), 400
+            if not file_contents_match(file.filename, data):
+                return jsonify({
+                    "success": False,
+                    "error": "File contents do not match a PDF, JPEG, or PNG"
+                }), 400
             return jsonify({
                 "success": True,
                 "stored": False,
@@ -255,8 +331,11 @@ def register_document_vault(app):
                     "mime_type": file.mimetype or "",
                 },
             })
-        except Exception as error:
-            return jsonify({"success": False, "error": str(error)}), 500
+        except Exception:
+            return jsonify({
+                "success": False,
+                "error": "Request could not be completed"
+            }), 500
 
     @app.route("/api/documents/upload", methods=["POST"])
     def upload_document():
@@ -327,6 +406,12 @@ def register_document_vault(app):
                     "error": "Maximum file size is 10 MB"
                 }), 400
 
+            if not file_contents_match(file.filename, data):
+                return jsonify({
+                    "success": False,
+                    "error": "File contents do not match a PDF, JPEG, or PNG"
+                }), 400
+
             file_hash = hashlib.sha256(data).hexdigest()
 
             ext = file.filename.rsplit(".", 1)[1].lower()
@@ -345,8 +430,8 @@ def register_document_vault(app):
             processing_status = "processed"
             try:
                 extracted_text = extract_text(storage_path)
-            except Exception as ocr_error:
-                print("OCR WARNING:", ocr_error)
+            except Exception:
+                print("OCR WARNING: text extraction failed")
                 extracted_text = ""
                 processing_status = "failed"
 
@@ -447,15 +532,20 @@ def register_document_vault(app):
                 "capture_source": capture_source
             })
 
-        except Exception as e:
+        except Exception:
             return jsonify({
                 "success": False,
-                "error": str(e)
+                "error": "Request could not be completed"
             }), 500
 
 
     @app.route("/api/documents/<int:profile_id>", methods=["GET"])
     def list_documents(profile_id):
+        if not 1 <= profile_id <= 5:
+            return jsonify({
+                "success": False,
+                "error": "profile_id must be an integer between 1 and 5"
+            }), 400
         try:
             conn = get_db()
 
@@ -493,25 +583,28 @@ def register_document_vault(app):
                 "documents": [dict(row) for row in rows]
             })
 
-        except Exception as e:
+        except Exception:
             return jsonify({
                 "success": False,
-                "error": str(e)
+                "error": "Request could not be completed"
             }), 500
 
 
     @app.route("/api/documents/file/<int:document_id>", methods=["GET"])
     def download_document(document_id):
+        profile_id, error = _query_profile_id()
+        if error is not None:
+            return error
         try:
             conn = get_db()
 
             row = conn.execute(
                 """
-                SELECT storage_path, original_filename
+                SELECT storage_path, original_filename, profile_id
                 FROM documents
-                WHERE id = ?
+                WHERE id = ? AND profile_id = ?
                 """,
-                (document_id,)
+                (document_id, profile_id)
             ).fetchone()
 
             conn.close()
@@ -522,27 +615,31 @@ def register_document_vault(app):
                     "error": "Document not found"
                 }), 404
 
-            if not os.path.exists(row["storage_path"]):
+            stored_file = _path_inside_storage(row["storage_path"])
+            if stored_file is None:
                 return jsonify({
                     "success": False,
                     "error": "Stored file not found"
                 }), 404
 
             return send_file(
-                row["storage_path"],
+                stored_file,
                 as_attachment=False,
-                download_name=row["original_filename"]
+                download_name=os.path.basename(row["original_filename"] or "document"),
             )
 
-        except Exception as e:
+        except Exception:
             return jsonify({
                 "success": False,
-                "error": str(e)
+                "error": "Request could not be completed"
             }), 500
 
 
     @app.route("/api/documents/<int:document_id>", methods=["DELETE"])
     def delete_document(document_id):
+        profile_id, error = _query_profile_id()
+        if error is not None:
+            return error
         try:
             conn = get_db()
 
@@ -550,9 +647,9 @@ def register_document_vault(app):
                 """
                 SELECT storage_path, profile_id
                 FROM documents
-                WHERE id = ?
+                WHERE id = ? AND profile_id = ?
                 """,
-                (document_id,)
+                (document_id, profile_id)
             ).fetchone()
 
             if not row:
@@ -562,12 +659,13 @@ def register_document_vault(app):
                     "error": "Document not found"
                 }), 404
 
-            if os.path.exists(row["storage_path"]):
-                os.remove(row["storage_path"])
+            stored_file = _path_inside_storage(row["storage_path"])
+            if stored_file is not None:
+                os.remove(stored_file)
 
             conn.execute(
-                "DELETE FROM documents WHERE id = ?",
-                (document_id,)
+                "DELETE FROM documents WHERE id = ? AND profile_id = ?",
+                (document_id, profile_id)
             )
             _clear_verified_profile(conn, row["profile_id"])
 
@@ -579,10 +677,10 @@ def register_document_vault(app):
                 "message": "Document deleted successfully"
             })
 
-        except Exception as e:
+        except Exception:
             return jsonify({
                 "success": False,
-                "error": str(e)
+                "error": "Request could not be completed"
             }), 500
 
 
@@ -627,13 +725,39 @@ document.getElementById('file').onchange=e=>showPreview(e.target,'file');
 document.getElementById('camera').onchange=e=>showPreview(e.target,'camera');
 async function loadDocuments(){
  const id=document.getElementById('profile_id').value||1;
- const r=await fetch('/api/documents/'+id),d=await r.json();
- if(!d.success){docs.innerHTML='Error: '+d.error;return}
- docs.innerHTML=d.documents.length?d.documents.map(x=>`<div class="doc"><b>${x.doc_type}</b><br>${x.original_filename}<br>Version: ${x.document_version}<br><a href="/api/documents/file/${x.id}" target="_blank">View File</a><button class="delete" onclick="deleteDocument(${x.id})">Delete</button></div>`).join(''):'No documents saved yet';
+ const r=await fetch('/api/documents/'+encodeURIComponent(id)),d=await r.json();
+ docs.replaceChildren();
+ if(!d.success){docs.textContent='Error: '+(d.error||'Could not load documents.');return}
+ if(!d.documents.length){docs.textContent='No documents saved yet';return}
+ d.documents.forEach(function(item){
+  const block=document.createElement('div');
+  block.className='doc';
+  const title=document.createElement('b');
+  title.textContent=item.doc_type||'';
+  block.appendChild(title);
+  block.appendChild(document.createElement('br'));
+  block.appendChild(document.createTextNode(item.original_filename||''));
+  block.appendChild(document.createElement('br'));
+  block.appendChild(document.createTextNode('Version: '+(item.document_version??'')));
+  block.appendChild(document.createElement('br'));
+  const link=document.createElement('a');
+  link.href='/api/documents/file/'+encodeURIComponent(item.id)+'?profile_id='+encodeURIComponent(id);
+  link.target='_blank';
+  link.textContent='View File';
+  block.appendChild(link);
+  const button=document.createElement('button');
+  button.className='delete';
+  button.type='button';
+  button.textContent='Delete';
+  button.onclick=function(){deleteDocument(item.id);};
+  block.appendChild(button);
+  docs.appendChild(block);
+ });
 }
 async function deleteDocument(id){
  if(!confirm('Delete this document?'))return;
- const r=await fetch('/api/documents/'+id,{method:'DELETE'}),d=await r.json();
+ const profileId=document.getElementById('profile_id').value||1;
+ const r=await fetch('/api/documents/'+encodeURIComponent(id)+'?profile_id='+encodeURIComponent(profileId),{method:'DELETE'}),d=await r.json();
  msg.textContent=d.message||d.error;loadDocuments();
 }
 document.getElementById('uploadForm').onsubmit=async e=>{

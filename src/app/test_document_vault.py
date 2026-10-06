@@ -3,6 +3,9 @@ from io import BytesIO
 
 from flask import Flask
 
+PNG = b"\x89PNG\r\n\x1a\n"
+JPEG = b"\xff\xd8\xff"
+
 from app import document_vault
 from app import profile
 
@@ -214,7 +217,7 @@ def test_upload_links_document_to_an_existing_profile(monkeypatch, tmp_path):
         data={
             "profile_id": "1",
             "doc_type": "identity",
-            "file": (BytesIO(b"document content"), "identity.png"),
+            "file": (BytesIO(PNG + b"document content"), "identity.png"),
         },
         content_type="multipart/form-data",
     )
@@ -243,7 +246,7 @@ def test_uploading_a_replacement_preserves_the_previous_version(
         data={
             "profile_id": "1",
             "doc_type": "identity",
-            "file": (BytesIO(b"first document"), "identity-v1.png"),
+            "file": (BytesIO(PNG + b"first document"), "identity-v1.png"),
         },
         content_type="multipart/form-data",
     ).get_json()
@@ -252,7 +255,7 @@ def test_uploading_a_replacement_preserves_the_previous_version(
         data={
             "profile_id": "1",
             "doc_type": "identity",
-            "file": (BytesIO(b"replacement document"), "identity-v2.png"),
+            "file": (BytesIO(PNG + b"replacement document"), "identity-v2.png"),
         },
         content_type="multipart/form-data",
     )
@@ -283,7 +286,7 @@ def test_upload_rejects_invalid_or_non_existing_profile_id(monkeypatch, tmp_path
             data={
                 "profile_id": profile_id,
                 "doc_type": "identity",
-                "file": (BytesIO(b"document content"), "identity.png"),
+                "file": (BytesIO(PNG + b"document content"), "identity.png"),
             },
             content_type="multipart/form-data",
         )
@@ -304,7 +307,7 @@ def test_camera_upload_is_stored_separately_from_file_upload(monkeypatch, tmp_pa
             "profile_id": "1",
             "doc_type": "aadhaar",
             "capture_source": "camera",
-            "file": (BytesIO(b"camera-bytes"), "aadhaar.jpg"),
+            "file": (BytesIO(JPEG + b"camera-bytes"), "aadhaar.jpg"),
         },
         content_type="multipart/form-data",
     )
@@ -325,7 +328,7 @@ def test_invalid_capture_source_is_rejected(monkeypatch, tmp_path):
             "profile_id": "1",
             "doc_type": "aadhaar",
             "capture_source": "scanner",
-            "file": (BytesIO(b"camera-bytes"), "aadhaar.jpg"),
+            "file": (BytesIO(JPEG + b"camera-bytes"), "aadhaar.jpg"),
         },
         content_type="multipart/form-data",
     )
@@ -343,7 +346,7 @@ def test_preview_does_not_store_a_document(monkeypatch, tmp_path):
             "profile_id": "1",
             "doc_type": "aadhaar",
             "capture_source": "camera",
-            "file": (BytesIO(b"preview-bytes"), "aadhaar.jpg"),
+            "file": (BytesIO(JPEG + b"preview-bytes"), "aadhaar.jpg"),
         },
         content_type="multipart/form-data",
     )
@@ -353,7 +356,7 @@ def test_preview_does_not_store_a_document(monkeypatch, tmp_path):
     assert body["stored"] is False
     assert body["preview"]["filename"] == "aadhaar.jpg"
     assert body["preview"]["capture_source"] == "camera"
-    assert body["preview"]["file_size"] == len(b"preview-bytes")
+    assert body["preview"]["file_size"] == len(JPEG + b"preview-bytes")
     listed = client.get("/api/documents/1").get_json()
     assert listed["count"] == 0
 
@@ -366,7 +369,7 @@ def test_unknown_document_type_is_rejected(monkeypatch, tmp_path):
         data={
             "profile_id": "1",
             "doc_type": "passport",
-            "file": (BytesIO(b"document content"), "passport.png"),
+            "file": (BytesIO(PNG + b"document content"), "passport.png"),
         },
         content_type="multipart/form-data",
     )
@@ -396,7 +399,7 @@ def test_ocr_failure_is_stored_as_failed_processing(monkeypatch, tmp_path):
         data={
             "profile_id": "1",
             "doc_type": "aadhaar",
-            "file": (BytesIO(b"aadhaar bytes"), "aadhaar.png"),
+            "file": (BytesIO(PNG + b"aadhaar bytes"), "aadhaar.png"),
         },
         content_type="multipart/form-data",
     )
@@ -407,7 +410,7 @@ def test_ocr_failure_is_stored_as_failed_processing(monkeypatch, tmp_path):
     stored = client.get("/api/documents/1").get_json()["documents"][0]
     assert stored["processing_status"] == "failed"
     assert stored["verified"] == 0
-    assert stored["file_size"] == len(b"aadhaar bytes")
+    assert stored["file_size"] == len(PNG + b"aadhaar bytes")
 
 
 def test_deleting_a_document_clears_verified_profile(monkeypatch, tmp_path):
@@ -435,12 +438,14 @@ def test_deleting_a_document_clears_verified_profile(monkeypatch, tmp_path):
         data={
             "profile_id": "1",
             "doc_type": "aadhaar",
-            "file": (BytesIO(b"aadhaar bytes"), "aadhaar.png"),
+            "file": (BytesIO(PNG + b"aadhaar bytes"), "aadhaar.png"),
         },
         content_type="multipart/form-data",
     ).get_json()
 
-    deleted = client.delete(f"/api/documents/{uploaded['document_id']}")
+    deleted = client.delete(
+        f"/api/documents/{uploaded['document_id']}?profile_id=1"
+    )
     assert deleted.status_code == 200
 
     conn = sqlite3.connect(db_path)
@@ -476,7 +481,7 @@ def test_replacing_a_document_clears_verified_profile(monkeypatch, tmp_path):
         data={
             "profile_id": "1",
             "doc_type": "aadhaar",
-            "file": (BytesIO(b"first aadhaar"), "aadhaar-v1.png"),
+            "file": (BytesIO(PNG + b"first aadhaar"), "aadhaar-v1.png"),
         },
         content_type="multipart/form-data",
     )
@@ -490,7 +495,7 @@ def test_replacing_a_document_clears_verified_profile(monkeypatch, tmp_path):
         data={
             "profile_id": "1",
             "doc_type": "aadhaar",
-            "file": (BytesIO(b"second aadhaar"), "aadhaar-v2.png"),
+            "file": (BytesIO(PNG + b"second aadhaar"), "aadhaar-v2.png"),
         },
         content_type="multipart/form-data",
     )

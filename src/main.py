@@ -118,7 +118,7 @@ def create_vacancy_api():
     except Exception as error:
         return jsonify({
             "success": False,
-            "error": str(error)
+            "error": "Request could not be completed"
         }), 500
 
 
@@ -135,7 +135,7 @@ def list_vacancies_api():
     except Exception as error:
         return jsonify({
             "success": False,
-            "error": str(error)
+            "error": "Request could not be completed"
         }), 500
 
 
@@ -157,7 +157,7 @@ def get_vacancy_api(vacancy_id):
     except Exception as error:
         return jsonify({
             "success": False,
-            "error": str(error)
+            "error": "Request could not be completed"
         }), 500
 
 
@@ -207,7 +207,7 @@ def create_vacancy_alert_api(vacancy_id):
             "error": "Vacancy not found"
         }), 404
     try:
-        profile_id = int(data.get("profile_id"))
+        profile_id = data.get("profile_id")
         if not profile_exists(profile_id):
             raise ValueError("profile_id must refer to an existing profile")
         alert = create_vacancy_alert(profile_id, vacancy_id)
@@ -219,6 +219,8 @@ def create_vacancy_alert_api(vacancy_id):
 @app.route("/api/vacancy-alerts/<int:profile_id>", methods=["GET"])
 def list_vacancy_alerts_api(profile_id):
     try:
+        if not 1 <= profile_id <= 5:
+            raise ValueError("profile_id must be an integer between 1 and 5")
         return jsonify({
             "success": True,
             "alerts": list_vacancy_alerts(profile_id)
@@ -374,7 +376,7 @@ def application_history_api(profile_id, application_id):
            methods=["POST"])
 def upload_profile_media(profile_id, media_type):
     from app.profile import profile_exists
-    from app.document_vault import STORAGE_DIR, allowed_file
+    from app.document_vault import STORAGE_DIR, allowed_file, file_contents_match
     from werkzeug.utils import secure_filename
     import hashlib
     import os
@@ -412,6 +414,12 @@ def upload_profile_media(profile_id, media_type):
         return jsonify({
             "success": False,
             "error": "Maximum file size is 10 MB"
+        }), 400
+
+    if not file_contents_match(filename, data):
+        return jsonify({
+            "success": False,
+            "error": "File contents do not match a PDF, JPEG, or PNG"
         }), 400
 
     digest = hashlib.sha256(data).hexdigest()
@@ -581,7 +589,10 @@ def verified_profile_api(profile_id):
     except ValueError as error:
         return jsonify({"success": False, "error": str(error)}), 400
     except Exception as error:
-        return jsonify({"success": False, "error": str(error)}), 500
+        return jsonify({
+            "success": False,
+            "error": "Request could not be completed",
+        }), 500
 
 # --------------------------------------------------
 # Test form
@@ -1726,10 +1737,13 @@ def analyze():
         # Raw Profile must never be used for form filling.
         # Form filling may use only an explicitly Verified Profile.
         profile_id = data.get("profile_id", 1)
-
-        try:
-            profile_id = int(profile_id)
-        except (TypeError, ValueError):
+        if isinstance(profile_id, str) and profile_id.strip().isdigit():
+            profile_id = int(profile_id.strip())
+        if (
+            isinstance(profile_id, bool)
+            or not isinstance(profile_id, int)
+            or not 1 <= profile_id <= 5
+        ):
             return jsonify({
                 "success": False,
                 "error": "profile_id must be an integer between 1 and 5"
@@ -1850,7 +1864,7 @@ def analyze():
 
             except Exception as ai_error:
 
-                result["ai_warning"] = str(ai_error)
+                result["ai_warning"] = "AI analysis was skipped"
 
         return jsonify({
             "success": True,
@@ -1861,7 +1875,7 @@ def analyze():
 
         return jsonify({
             "success": False,
-            "error": str(error)
+            "error": "Request could not be completed"
         }), 500
 
 
