@@ -12,8 +12,9 @@ This checklist is based on what can be verified in the repository. It is not a c
 - Optional database and document-storage locations are `FORMBHARAT_DATABASE_PATH` and `FORMBHARAT_STORAGE_DIR`. Unset values keep the existing local files.
 - `.env.example` documents the settings and contains no credentials.
 - `.replit` starts the app in production mode. Replit supplies `PORT`.
-- Phase 8 mobile UI and security behavior remain covered by the existing tests.
+- Mobile navigation, form CSRF, and the local verified-profile fill path have tests.
 - OTP, CAPTCHA, verification codes, and final form submission stay user-controlled.
+- Local browser tests use installed Microsoft Edge. Playwright Chromium is not required.
 
 ## Not yet ready
 
@@ -23,4 +24,8 @@ This checklist is based on what can be verified in the repository. It is not a c
 - OCR needs the Tesseract program, and PDF OCR needs Poppler's `pdftoppm`, installed on the host. Those are not Python packages.
 - No external accounts, API keys, or payment credentials are part of this application.
 - Legal, business, and store-listing approvals are outside the repository.
-- The browser test still requires Playwright, which is not installed in this environment.
+- Accounts can register and log in. A new account does not receive old profile slots. Only an empty slot can be claimed, and only with `FORMBHARAT_SLOT_CLAIM_CODE` plus an explicit confirmation.
+- New documents are encrypted only when `FORMBHARAT_DOCUMENT_KEY` is a valid 32-byte key. Set `FORMBHARAT_REQUIRE_DOCUMENT_ENCRYPTION=1` to reject uploads when that key is missing. Existing files stay readable and are not rewritten. A lost key cannot be recovered, and a new key does not open files written with the old key. OCR text for new encrypted uploads is stored with an `FBTEXT1` prefix. Older OCR rows in the database remain plaintext. Temporary OCR files are deleted after reading. Downloads are decrypted in memory and are not written back.
+- Vacancy eligibility text is not an automatic pass or fail. Only an explicit criteria list can be compared, and a missing list stays unknown.
+- Live government-site filling, payments, and a public deployment are not implemented.
+- The browser test uses installed Edge through Playwright. Chromium download is not required.

@@ -17,10 +17,18 @@ def _load_app():
 
 
 def _client(tmp_path, monkeypatch):
+    from app import document_vault, verified_profile
+
     db = tmp_path / "applications.db"
+    storage = tmp_path / "documents"
+    monkeypatch.setenv("FORMBHARAT_DATABASE_PATH", str(db))
+    monkeypatch.setenv("FORMBHARAT_STORAGE_DIR", str(storage))
     monkeypatch.setattr(tracker, "DB_PATH", db)
     monkeypatch.setattr(vacancy, "DB_PATH", db)
     monkeypatch.setattr(profile, "DB_PATH", db)
+    monkeypatch.setattr(verified_profile, "DB_PATH", db)
+    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
+    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(storage))
     profile.save_profile({"name": "User One"}, 1)
     profile.save_profile({"name": "User Two"}, 2)
     vacancy.init_vacancy_db()
@@ -131,8 +139,14 @@ def test_application_api_creates_lists_filters_and_isolates_profiles(
 
     listed = client.get("/api/applications/1")
     assert listed.status_code == 200
-    titles = [item["title"] for item in listed.get_json()["applications"]]
+    assert listed.get_json()["authenticated_account"] is False
+    assert listed.get_json()["access"] == "profile_slot"
+    listed_items = listed.get_json()["applications"]
+    titles = [item["title"] for item in listed_items]
     assert titles == ["Submitted Exam", "SSC CGL"]
+    tracked = next(item for item in listed_items if item["title"] == "SSC CGL")
+    assert tracked["official_link"] == "https://example.gov.in/tracked"
+    assert tracked["deadline"] == ""
     assert all(item["profile_id"] == 1 for item in listed.get_json()["applications"])
 
     filtered = client.get("/api/applications/1?status=submitted")

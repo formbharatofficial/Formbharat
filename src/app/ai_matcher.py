@@ -27,9 +27,6 @@ class AIMatcher:
     )
 
     RELATED_PERSON_TERMS = (
-        "guardian",
-        "guardian name",
-        "guardian_name",
         "husband",
         "husband name",
         "husband_name",
@@ -61,6 +58,11 @@ class AIMatcher:
             "mother name",
             "mother_name",
             "mothername",
+        ),
+        "guardian_name": (
+            "guardian name",
+            "guardian_name",
+            "guardianname",
         ),
         "email": (
             "email",
@@ -143,9 +145,20 @@ class AIMatcher:
                     "reason": "otp_or_captcha",
                 }
 
-        # Fields belonging to another person must not be auto-filled.
-        # Father/mother fields are intentionally excluded: they have dedicated
-        # profile keys and can be filled only from those explicit values.
+        # Guardian is a dedicated profile key, like father and mother.
+        # Husband, wife, and spouse stay blocked. Filling still requires a
+        # verified guardian_name that is not the applicant's own name.
+        for purpose, patterns in self.FIELD_PATTERNS.items():
+            if purpose != "guardian_name":
+                continue
+            for pattern in patterns:
+                if self._normalize(pattern) in text:
+                    return {
+                        "purpose": "guardian_name",
+                        "confidence": "high",
+                        "blocked": False,
+                    }
+
         for term in self.RELATED_PERSON_TERMS:
             if self._normalize(term) in text:
                 return {

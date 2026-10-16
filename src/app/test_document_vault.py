@@ -33,7 +33,8 @@ def _document_client(monkeypatch, tmp_path, saved_profile_ids=()):
     app = Flask(__name__)
     app.config["TESTING"] = True
     document_vault.register_document_vault(app)
-    return app.test_client()
+    from app.request_guard import attach_csrf
+    return attach_csrf(app.test_client())
 
 
 def test_vault_registration_creates_documents_table_for_a_fresh_database(
@@ -392,7 +393,8 @@ def test_ocr_failure_is_stored_as_failed_processing(monkeypatch, tmp_path):
     app = Flask(__name__)
     app.config["TESTING"] = True
     document_vault.register_document_vault(app)
-    client = app.test_client()
+    from app.request_guard import attach_csrf
+    client = attach_csrf(app.test_client())
 
     response = client.post(
         "/api/documents/upload",
@@ -508,3 +510,26 @@ def test_replacing_a_document_clears_verified_profile(monkeypatch, tmp_path):
     ).fetchone()[0]
     conn.close()
     assert verified == 0
+
+
+def test_document_file_stays_with_its_profile(monkeypatch, tmp_path):
+    client = _document_client(monkeypatch, tmp_path, saved_profile_ids=(1, 2))
+    uploaded = client.post(
+        "/api/documents/upload",
+        data={
+            "profile_id": "1",
+            "doc_type": "identity",
+            "file": (BytesIO(PNG + b"owned"), "owned.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    document_id = uploaded.get_json()["document_id"]
+
+    foreign = client.get(f"/api/documents/file/{document_id}?profile_id=2")
+    owned = client.get(f"/api/documents/file/{document_id}?profile_id=1")
+    other_list = client.get("/api/documents/2").get_json()
+
+    assert uploaded.status_code == 200
+    assert foreign.status_code == 404
+    assert owned.status_code == 200
+    assert other_list["documents"] == []

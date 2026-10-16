@@ -100,7 +100,10 @@ def verify_profile_documents(profile_data, profile_id, db_path):
 
     for row in rows:
         try:
-            extracted_data = json.loads(row["extracted_data"] or "{}")
+            from app.document_encryption import reveal_text
+            extracted_data = json.loads(
+                reveal_text(row["extracted_data"] or "{}") or "{}"
+            )
         except (TypeError, json.JSONDecodeError):
             extracted_data = {}
 

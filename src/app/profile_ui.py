@@ -1,5 +1,6 @@
 from flask import jsonify, render_template_string, request, redirect, url_for
 from app.profile import init_db, save_profile, get_profile
+from app.request_guard import issue_csrf_token
 
 PROFILE_PAGE = """
 <!doctype html>
@@ -29,6 +30,7 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 {% endif %}
 
 <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
 <label>Full Name</label>
 <input name="name" value="{{ profile.name }}" placeholder="Enter your name">
@@ -56,6 +58,10 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 
 <label>Mother Name</label>
 <input name="mother_name" value="{{ profile.mother_name }}" placeholder="Mother's name">
+
+<label>Guardian Name / अभिभावक</label>
+<input name="guardian_name" value="{{ profile.guardian_name }}" placeholder="Only if different from father and mother">
+<p>खाली रहने पर guardian नहीं भरा जाता। यह आपका अपना नाम नहीं है।</p>
 
 <label>Address</label>
 <input name="address" value="{{ profile.address }}" placeholder="Full address">
@@ -158,6 +164,7 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 
 def register_profile_ui(app):
     init_db()
+    from app.ownership import SlotAccessError, assert_slot_access, guard_response
 
     def profile_id_from_path(profile_id):
         try:
@@ -167,6 +174,13 @@ def register_profile_ui(app):
 
     @app.route("/profile", methods=["GET", "POST"])
     def profile_page():
+        try:
+            assert_slot_access(1)
+        except SlotAccessError as error:
+            return render_template_string(
+                "<p>{{ message }}</p><p><a href='/account'>Account</a></p>",
+                message=str(error),
+            ), 403
         if request.method == "POST":
             save_profile({
                 "name": request.form.get("name", ""),
@@ -177,6 +191,7 @@ def register_profile_ui(app):
                 "country": request.form.get("country", "in"),
                 "father_name": request.form.get("father_name", ""),
                 "mother_name": request.form.get("mother_name", ""),
+                "guardian_name": request.form.get("guardian_name", ""),
                 "gender": request.form.get("gender", ""),
                 "nationality": request.form.get("nationality", ""),
                 "category": request.form.get("category", ""),
@@ -215,13 +230,18 @@ def register_profile_ui(app):
         return render_template_string(
             PROFILE_PAGE,
             profile=profile,
-            saved=request.args.get("saved") == "1"
+            saved=request.args.get("saved") == "1",
+            csrf_token=issue_csrf_token(),
         )
 
     @app.route("/api/profile/<profile_id>", methods=["GET"])
     def get_profile_api(profile_id):
         try:
-            saved_profile = get_profile(profile_id_from_path(profile_id))
+            selected = profile_id_from_path(profile_id)
+            denied = guard_response(selected)
+            if denied is not None:
+                return denied
+            saved_profile = get_profile(selected)
             return jsonify({
                 "success": True,
                 "profile": saved_profile
@@ -249,6 +269,9 @@ def register_profile_ui(app):
 
         try:
             parsed_profile_id = profile_id_from_path(profile_id)
+            denied = guard_response(parsed_profile_id)
+            if denied is not None:
+                return denied
             save_profile(data, parsed_profile_id)
             return jsonify({
                 "success": True,

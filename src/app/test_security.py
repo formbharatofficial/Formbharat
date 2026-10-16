@@ -10,7 +10,20 @@ from app import profile
 HTML = "<form><input id='name' name='name' type='text'></form>"
 
 
-def _load_main(module_name):
+def _load_main(module_name, monkeypatch, db, storage):
+    import app.application_tracker as tracker
+    import app.vacancy as vacancy
+    from app import verified_profile
+
+    monkeypatch.setenv("FORMBHARAT_DATABASE_PATH", str(db))
+    monkeypatch.setenv("FORMBHARAT_STORAGE_DIR", str(storage))
+    monkeypatch.setattr(vacancy, "DB_PATH", db)
+    monkeypatch.setattr(tracker, "DB_PATH", db)
+    monkeypatch.setattr(profile, "DB_PATH", db)
+    monkeypatch.setattr(verified_profile, "DB_PATH", db)
+    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
+    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(storage))
+
     spec = importlib.util.spec_from_file_location(
         module_name,
         Path(__file__).resolve().parents[1] / "main.py",
@@ -35,7 +48,8 @@ def _document_client(monkeypatch, tmp_path, saved_profile_ids=(1,)):
     app.config["TESTING"] = True
     document_vault.register_document_vault(app)
     document_vault.register_document_vault_ui(app)
-    return app.test_client()
+    from app.request_guard import attach_csrf
+    return attach_csrf(app.test_client())
 
 
 _SIGNATURES = {
@@ -78,7 +92,12 @@ def test_analyze_rejects_bool_and_float_profile_ids(monkeypatch, tmp_path):
     monkeypatch.setattr(vault, "DB_PATH", str(db))
     monkeypatch.setattr(vault, "STORAGE_DIR", str(tmp_path / "documents"))
     monkeypatch.setattr(verified_profile, "DB_PATH", db)
-    main = _load_main("formbharat_security_analyze")
+    main = _load_main(
+        "formbharat_security_analyze",
+        monkeypatch,
+        db,
+        tmp_path / "documents",
+    )
     client = main.app.test_client()
 
     for profile_id in (True, False, 1.9):
@@ -109,7 +128,12 @@ def test_vacancy_alert_rejects_non_integer_profile_ids(monkeypatch, tmp_path):
         organization="Org",
         official_link="https://example.gov.in/secure",
     )
-    client = _load_main("formbharat_security_vacancy").app.test_client()
+    client = _load_main(
+        "formbharat_security_vacancy",
+        monkeypatch,
+        db,
+        tmp_path / "documents",
+    ).app.test_client()
 
     for profile_id in (True, False, 1.9, "1"):
         response = client.post(
@@ -143,7 +167,12 @@ def test_application_api_rejects_non_integer_vacancy_ids(monkeypatch, tmp_path):
     monkeypatch.setattr(profile, "DB_PATH", db)
     profile.save_profile({"name": "User One"}, 1)
     vacancy.init_vacancy_db()
-    client = _load_main("formbharat_security_applications").app.test_client()
+    client = _load_main(
+        "formbharat_security_applications",
+        monkeypatch,
+        db,
+        tmp_path / "documents",
+    ).app.test_client()
 
     for vacancy_id in (True, False, 1.9, 0, -1):
         response = client.post(

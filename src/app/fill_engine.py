@@ -23,7 +23,9 @@ def _is_security(*parts):
 
     token_set = set(tokens)
     compact = "".join(tokens)
-    if token_set & {"otp", "captcha", "verification"}:
+    if token_set & {"otp", "captcha", "verification", "payment", "fee", "fees", "payable", "upi", "cvv"}:
+        return True
+    if "cardnumber" in compact or "debitcard" in compact or "creditcard" in compact:
         return True
     if "otp" in compact or "captcha" in compact or "verification" in compact:
         return True
@@ -81,6 +83,49 @@ def _tag_security(tag, soup):
     )
 
 
+def _same_text(left, right):
+    return str(left or "").strip().lower() == str(right or "").strip().lower()
+
+
+def _find_tag(soup, field_id, field_name, field_type, value):
+    if field_id:
+        found = soup.find(id=field_id)
+        if found is not None:
+            return found
+    if not field_name:
+        return None
+    if field_type in {"checkbox", "radio"}:
+        for tag in soup.find_all("input", attrs={"name": field_name}):
+            if str(tag.get("type") or "").lower() != field_type:
+                continue
+            if _same_text(tag.get("value"), value):
+                return tag
+        return None
+    return soup.find(
+        ["input", "textarea", "select"],
+        attrs={"name": field_name},
+    )
+
+
+def _select_matching_option(tag, value):
+    matches = []
+    for option in tag.find_all("option"):
+        if _same_text(option.get("value", ""), value) or _same_text(
+            option.get_text(" ", strip=True),
+            value,
+        ):
+            matches.append(option)
+    if len(matches) != 1:
+        return False
+    chosen = matches[0]
+    for option in tag.find_all("option"):
+        if option is chosen:
+            option["selected"] = True
+        else:
+            option.attrs.pop("selected", None)
+    return True
+
+
 def _is_unsafe_control(tag):
     if tag.name == "button":
         return True
@@ -135,16 +180,7 @@ def fill_form(html, matched_fields):
             _skip(skipped, field, "empty profile value")
             continue
 
-        tag = None
-
-        if field_id:
-            tag = soup.find(id=field_id)
-
-        if tag is None and field_name:
-            tag = soup.find(
-                ["input", "textarea", "select"],
-                attrs={"name": field_name}
-            )
+        tag = _find_tag(soup, field_id, field_name, field_type, value)
 
         if tag is None:
             _skip(skipped, field, "HTML field not found")
@@ -166,14 +202,9 @@ def fill_form(html, matched_fields):
         # ------------------------------------------
 
         if tag_name == "select":
-
-            for option in tag.find_all("option"):
-                option_value = option.get("value", "")
-
-                if str(option_value) == str(value):
-                    option["selected"] = True
-                else:
-                    option.attrs.pop("selected", None)
+            if not _select_matching_option(tag, value):
+                _skip(skipped, field, "option not found")
+                continue
 
         # ------------------------------------------
         # CHECKBOX / RADIO
@@ -183,16 +214,30 @@ def fill_form(html, matched_fields):
             "checkbox",
             "radio"
         ):
-
-            if str(value).lower() in (
-                "true",
-                "1",
-                "yes",
-                "on"
-            ):
-                tag["checked"] = True
-            else:
-                tag.attrs.pop("checked", None)
+            option_value = str(tag.get("value") or "")
+            affirmative = str(value).strip().lower() in {
+                "true", "1", "yes", "on",
+            }
+            chosen = _same_text(option_value, value) or (
+                affirmative and tag_type == "checkbox"
+            )
+            if tag_type == "radio":
+                chosen = _same_text(option_value, value) or (
+                    affirmative and not option_value
+                )
+                if field_id and affirmative:
+                    chosen = True
+            if not chosen:
+                _skip(skipped, field, "option not found")
+                continue
+            if tag_type == "radio" and tag.get("name"):
+                for sibling in soup.find_all(
+                    "input",
+                    attrs={"name": tag.get("name")},
+                ):
+                    if str(sibling.get("type") or "").lower() == "radio":
+                        sibling.attrs.pop("checked", None)
+            tag["checked"] = True
 
         # ------------------------------------------
         # NORMAL INPUT / TEXTAREA

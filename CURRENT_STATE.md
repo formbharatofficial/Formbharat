@@ -30,5 +30,8 @@ Previous verified checkpoint on main:
 
 ## Development Rule
 The 8-phase roadmap is locked.
-Do not start Phase 6 in this checkpoint.
-Inspect the existing Phase 5 reader and field analyzer before changing them.
+The phase labels above are the roadmap record. They are not a certificate that the current code has finished every phase.
+Inspect the existing reader, fill boundary, and tests before changing them.
+
+## Verified local checkpoint — 2026-10-16
+Local verified-profile assistance, a kept-open headless Edge reread, review before submit, form and multipart CSRF, request rate limiting, document profile checks, and the shared screen theme were exercised. Radio and select controls are filled only when one option matches. Accounts can register and log in. Old profile slots are not claimed automatically. Only an empty slot can be claimed with a server claim code and explicit confirmation. `guardian_name` is a separate field and is auto-filled only from a verified value that is not the applicant's own name. New documents are encrypted when `FORMBHARAT_DOCUMENT_KEY` is valid. If encryption is required and the key is missing, the upload is rejected. Existing document files are not rewritten. `GET /api/vacancies/<id>/eligibility` returns unknown unless a vacancy supplies an explicit criteria list. From `src`, the latest full `py -3 -m pytest app -q --tb=line` result is in PROJECT_STATUS.md. Government-site filling is not implemented. No phase is certified complete by this checkpoint.

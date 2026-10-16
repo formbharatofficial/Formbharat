@@ -8,14 +8,18 @@ from app import profile as profile_module
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
-    from app import profile, document_vault, verified_profile
+    from app import application_tracker, document_vault, profile, vacancy, verified_profile
 
     db = tmp_path / "formbharat.db"
-
+    storage = tmp_path / "documents"
+    monkeypatch.setenv("FORMBHARAT_DATABASE_PATH", str(db))
+    monkeypatch.setenv("FORMBHARAT_STORAGE_DIR", str(storage))
+    monkeypatch.setattr(vacancy, "DB_PATH", db)
+    monkeypatch.setattr(application_tracker, "DB_PATH", db)
     monkeypatch.setattr(profile, "DB_PATH", db)
-    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
-    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(tmp_path / "documents"))
     monkeypatch.setattr(verified_profile, "DB_PATH", db)
+    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
+    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(storage))
 
     import importlib.util
 

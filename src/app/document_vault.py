@@ -11,6 +11,7 @@ from app.profile import profile_exists
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 DB_PATH = os.path.join(BASE_DIR, "formbharat.db")
+# Files are stored as uploaded bytes. At-rest encryption is not enabled.
 STORAGE_DIR = os.path.join(BASE_DIR, "documents")
 
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
@@ -131,6 +132,28 @@ def init_db():
         conn.close()
 
 
+def verified_documents_for_profile(profile_id):
+    """Return verified vault rows for one profile.
+
+    Unverified documents and other profiles are not included.
+    """
+    init_db()
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, profile_id, doc_type, document_reference, verified
+            FROM documents
+            WHERE profile_id = ? AND verified = 1
+            ORDER BY id DESC
+            """,
+            (profile_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -246,6 +269,7 @@ def build_extracted_data(extracted_text):
     data = {
         "name": "",
         "father_name": "",
+        "guardian_name": "",
         "dob": "",
         "class": "",
         "raw_text": extracted_text or ""
@@ -256,6 +280,7 @@ def build_extracted_data(extracted_text):
     patterns = {
         "name": r"(?im)^\s*(?:name|kame)\s*[:\-]\s*(.+)$",
         "father_name": r"(?im)^\s*(?:father\s*name|father)\s*[:\-]\s*(.+)$",
+        "guardian_name": r"(?im)^\s*guardian(?:\s*name)?\s*[:\-]\s*(.+)$",
         "dob": r"(?im)^\s*(?:dob|date\s*of\s*birth)\s*[:\-]\s*(.+)$",
         "class": r"(?im)^\s*class\s*[:\-]\s*(.+)$"
     }
@@ -269,7 +294,9 @@ def build_extracted_data(extracted_text):
 
 
 def register_document_vault(app):
+    from app.request_guard import install_request_guard
 
+    install_request_guard(app)
     init_db()
     os.makedirs(STORAGE_DIR, exist_ok=True)
 
@@ -293,6 +320,10 @@ def register_document_vault(app):
                     "success": False,
                     "error": "profile_id must refer to an existing valid profile"
                 }), 400
+            from app.ownership import guard_response
+            denied = guard_response(profile_id)
+            if denied is not None:
+                return denied
             if doc_type not in ALLOWED_DOC_TYPES:
                 return jsonify({
                     "success": False,
@@ -359,6 +390,11 @@ def register_document_vault(app):
                     "error": "profile_id must refer to an existing valid profile"
                 }), 400
 
+            from app.ownership import guard_response
+            denied = guard_response(profile_id)
+            if denied is not None:
+                return denied
+
             if not doc_type:
                 return jsonify({
                     "success": False,
@@ -422,17 +458,38 @@ def register_document_vault(app):
 
             storage_path = os.path.join(profile_dir, safe_name)
 
-            with open(storage_path, "wb") as f:
-                f.write(data)
+            from app.document_encryption import (
+                DocumentStorageError,
+                protect_text,
+                read_for_ocr,
+                store_bytes,
+            )
+            try:
+                stored_bytes = store_bytes(data)
+            except DocumentStorageError as error:
+                return jsonify({"success": False, "error": str(error)}), 400
 
-            # OCR / text extraction
+            with open(storage_path, "wb") as handle:
+                handle.write(stored_bytes)
+
             extracted_text = ""
+            structured_data = build_extracted_data("")
             processing_status = "processed"
             try:
-                extracted_text = extract_text(storage_path)
+                plain_text = read_for_ocr(storage_path, extract_text) or ""
+                structured_data = build_extracted_data(plain_text)
+                extracted_text = protect_text(plain_text)
+                stored_structured = protect_text(
+                    json.dumps(structured_data, ensure_ascii=False)
+                )
+            except DocumentStorageError:
+                extracted_text = ""
+                stored_structured = "{}"
+                processing_status = "failed"
             except Exception:
                 print("OCR WARNING: text extraction failed")
                 extracted_text = ""
+                stored_structured = "{}"
                 processing_status = "failed"
 
             now = datetime.utcnow().isoformat()
@@ -500,7 +557,7 @@ def register_document_vault(app):
                     file.mimetype or "",
                     file_hash,
                     extracted_text,
-                    json.dumps(build_extracted_data(extracted_text), ensure_ascii=False),
+                    stored_structured,
                     0,
                     now,
                     now,
@@ -546,6 +603,10 @@ def register_document_vault(app):
                 "success": False,
                 "error": "profile_id must be an integer between 1 and 5"
             }), 400
+        from app.ownership import guard_response
+        denied = guard_response(profile_id)
+        if denied is not None:
+            return denied
         try:
             conn = get_db()
 
@@ -577,10 +638,18 @@ def register_document_vault(app):
 
             conn.close()
 
+            from app.document_encryption import reveal_text
+            documents = []
+            for row in rows:
+                item = dict(row)
+                item["extracted_text"] = reveal_text(item.get("extracted_text"))
+                item["extracted_data"] = reveal_text(item.get("extracted_data"))
+                documents.append(item)
+
             return jsonify({
                 "success": True,
-                "count": len(rows),
-                "documents": [dict(row) for row in rows]
+                "count": len(documents),
+                "documents": documents
             })
 
         except Exception:
@@ -595,12 +664,16 @@ def register_document_vault(app):
         profile_id, error = _query_profile_id()
         if error is not None:
             return error
+        from app.ownership import guard_response
+        denied = guard_response(profile_id)
+        if denied is not None:
+            return denied
         try:
             conn = get_db()
 
             row = conn.execute(
                 """
-                SELECT storage_path, original_filename, profile_id
+                SELECT storage_path, original_filename, profile_id, mime_type
                 FROM documents
                 WHERE id = ? AND profile_id = ?
                 """,
@@ -622,10 +695,21 @@ def register_document_vault(app):
                     "error": "Stored file not found"
                 }), 404
 
+            from io import BytesIO
+            from app.document_encryption import DocumentStorageError, read_bytes
+            try:
+                payload = read_bytes(stored_file)
+            except (DocumentStorageError, OSError):
+                return jsonify({
+                    "success": False,
+                    "error": "Stored file could not be read"
+                }), 404
+
             return send_file(
-                stored_file,
+                BytesIO(payload),
                 as_attachment=False,
                 download_name=os.path.basename(row["original_filename"] or "document"),
+                mimetype=row["mime_type"] or None,
             )
 
         except Exception:
@@ -640,6 +724,10 @@ def register_document_vault(app):
         profile_id, error = _query_profile_id()
         if error is not None:
             return error
+        from app.ownership import guard_response
+        denied = guard_response(profile_id)
+        if denied is not None:
+            return denied
         try:
             conn = get_db()
 
@@ -700,6 +788,7 @@ button{width:100%;margin-top:15px;padding:13px;background:#146c43;color:#fff;bor
 </style></head>
 <body><div class="container">
 <div class="card"><h1>FormBharat 📁</h1><p>Document Vault</p>
+<p>पुरानी फाइलें मूल bytes में रहती हैं और दोबारा नहीं लिखी जातीं। नई upload तभी encrypt होती है जब document key लगी हो। Key आवश्यक हो और उपलब्ध न हो, तो upload रुक जाती है।</p>
 <form id="uploadForm">
 <label>Profile ID</label><input id="profile_id" type="number" min="1" max="5" value="1" required>
 <label>Document Type</label><input id="doc_type" placeholder="Aadhaar / Marksheet / Other" required>
@@ -712,6 +801,11 @@ button{width:100%;margin-top:15px;padding:13px;background:#146c43;color:#fff;bor
 </div>
 <script>
 const msg=document.getElementById('message'),docs=document.getElementById('documents');
+async function csrfHeaders(){
+ const response=await fetch('/api/csrf');
+ const body=await response.json();
+ return {'X-FormBharat-Token': body.token||''};
+}
 let captureSource='file';
 function showPreview(input, source){
  const chosen=input.files[0];
@@ -740,6 +834,10 @@ async function loadDocuments(){
   block.appendChild(document.createElement('br'));
   block.appendChild(document.createTextNode('Version: '+(item.document_version??'')));
   block.appendChild(document.createElement('br'));
+  block.appendChild(document.createTextNode('Verified: '+(item.verified ? 'yes' : 'no')));
+  block.appendChild(document.createElement('br'));
+  block.appendChild(document.createTextNode('Processing: '+(item.processing_status||'unknown')+'. OCR is not verification.'));
+  block.appendChild(document.createElement('br'));
   const link=document.createElement('a');
   link.href='/api/documents/file/'+encodeURIComponent(item.id)+'?profile_id='+encodeURIComponent(id);
   link.target='_blank';
@@ -757,7 +855,8 @@ async function loadDocuments(){
 async function deleteDocument(id){
  if(!confirm('Delete this document?'))return;
  const profileId=document.getElementById('profile_id').value||1;
- const r=await fetch('/api/documents/'+encodeURIComponent(id)+'?profile_id='+encodeURIComponent(profileId),{method:'DELETE'}),d=await r.json();
+ const headers=await csrfHeaders();
+ const r=await fetch('/api/documents/'+encodeURIComponent(id)+'?profile_id='+encodeURIComponent(profileId),{method:'DELETE',headers}),d=await r.json();
  msg.textContent=d.message||d.error;loadDocuments();
 }
 document.getElementById('uploadForm').onsubmit=async e=>{
@@ -769,7 +868,8 @@ document.getElementById('uploadForm').onsubmit=async e=>{
  const camera=document.getElementById('camera').files[0];
  const chosen=captureSource==='camera'&&camera?camera:document.getElementById('file').files[0];
  f.append('file',chosen);
- const r=await fetch('/api/documents/upload',{method:'POST',body:f}),d=await r.json();
+ const headers=await csrfHeaders();
+ const r=await fetch('/api/documents/upload',{method:'POST',body:f,headers}),d=await r.json();
  msg.textContent=d.message||d.error;
  if(d.success){document.getElementById('file').value='';loadDocuments()}
 };

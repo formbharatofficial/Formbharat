@@ -44,10 +44,14 @@ class FormReader:
     "name": tag.get("name", ""),
     "id": tag.get("id", ""),
     "type": tag.get("type", ""),
+    "capture": tag.get("capture", "") or "",
+    "accept": tag.get("accept", "") or "",
+    "max_bytes": int(tag["data-max-bytes"]) if str(tag.get("data-max-bytes") or "").isdigit() else None,
     "placeholder": tag.get("placeholder", ""),
     "value": tag.get("value", ""),
 "checked": tag.has_attr("checked"),
 "disabled": tag.has_attr("disabled"),
+"readonly": tag.has_attr("readonly"),
 "label": "",
 "options": []
 }

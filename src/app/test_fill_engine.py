@@ -204,3 +204,36 @@ def test_missing_html_field_is_skipped():
         "field": "missing",
         "reason": "HTML field not found",
     }]
+
+
+def test_radio_group_selects_only_the_matching_value():
+    html = """
+    <form>
+      <input name="gender" type="radio" value="male" checked>
+      <input name="gender" type="radio" value="female">
+      <select name="category">
+        <option value="gen">General</option>
+        <option value="obc">OBC</option>
+      </select>
+    </form>
+    """
+    result = fill_form(html, [
+        _field(name="gender", id="", type="radio", profile_key="gender", profile_value="female"),
+        _field(name="category", id="", type="select", profile_key="category", profile_value="OBC"),
+    ])
+
+    assert result["filled_count"] == 2
+    assert 'value="female"' in result["html"]
+    assert 'checked="True"' in result["html"]
+    assert 'value="male" checked' not in result["html"]
+    assert 'value="obc"' in result["html"] and 'selected="True"' in result["html"]
+
+
+def test_unknown_select_option_is_not_reported_as_filled():
+    html = '<select name="category"><option value="gen">General</option></select>'
+    result = fill_form(html, [
+        _field(name="category", id="", type="select", profile_value="SC"),
+    ])
+
+    assert result["filled"] == []
+    assert result["skipped"] == [{"field": "category", "reason": "option not found"}]

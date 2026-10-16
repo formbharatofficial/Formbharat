@@ -79,6 +79,32 @@ def test_father_and_mother_names_are_not_invented_without_dedicated_values():
     assert result[1]["profile_value"] is None
 
 
+def test_guardian_fills_only_its_verified_value_and_not_the_applicant():
+    fields = [
+        {"id": "guardian_name", "label": "Guardian Name", "name": "guardian_name"},
+    ]
+    empty = match_profile_to_fields(fields, {"name": "Test User"})
+    same = match_profile_to_fields(
+        fields,
+        {"name": "Test User", "guardian_name": "Test User"},
+    )
+    separate = match_profile_to_fields(
+        fields,
+        {
+            "name": "Test User",
+            "father_name": "Test Father",
+            "guardian_name": "Test Guardian",
+        },
+    )
+
+    assert empty[0]["matched"] is False
+    assert empty[0]["profile_value"] is None
+    assert same[0]["matched"] is False
+    assert same[0]["match_confidence"] == "blocked"
+    assert separate[0]["matched"] is True
+    assert separate[0]["profile_value"] == "Test Guardian"
+
+
 def test_medium_confidence_match_is_not_filled():
     profile = {"name": "Test User"}
     fields = [

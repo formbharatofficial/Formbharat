@@ -5,7 +5,23 @@ from pathlib import Path
 import app.vacancy as vacancy
 
 
-def _load_app():
+def _load_app(monkeypatch, tmp_path, db=None):
+    import app.application_tracker as tracker
+    import app.document_vault as document_vault
+    import app.verified_profile as verified_profile
+    from app import profile
+
+    database = tmp_path / "formbharat.db" if db is None else db
+    storage = tmp_path / "documents"
+    monkeypatch.setenv("FORMBHARAT_DATABASE_PATH", str(database))
+    monkeypatch.setenv("FORMBHARAT_STORAGE_DIR", str(storage))
+    monkeypatch.setattr(vacancy, "DB_PATH", database)
+    monkeypatch.setattr(tracker, "DB_PATH", database)
+    monkeypatch.setattr(profile, "DB_PATH", database)
+    monkeypatch.setattr(verified_profile, "DB_PATH", database)
+    monkeypatch.setattr(document_vault, "DB_PATH", str(database))
+    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(storage))
+
     spec = importlib.util.spec_from_file_location(
         "formbharat_main_for_vacancy_test",
         Path(__file__).resolve().parents[1] / "main.py",
@@ -73,8 +89,8 @@ def test_list_vacancies(tmp_path, monkeypatch):
     assert len(items) == 2
     assert items[0]["title"] == "Vacancy Two"
 
-def test_vacancy_api_create_list_and_get():
-    client = _load_app().test_client()
+def test_vacancy_api_create_list_and_get(monkeypatch, tmp_path):
+    client = _load_app(monkeypatch, tmp_path).test_client()
 
     response = client.post(
         "/api/vacancies",
@@ -107,8 +123,8 @@ def test_vacancy_api_create_list_and_get():
     assert data["vacancy"]["title"] == "API Test Vacancy"
 
 
-def test_vacancy_api_validation_and_not_found():
-    client = _load_app().test_client()
+def test_vacancy_api_validation_and_not_found(monkeypatch, tmp_path):
+    client = _load_app(monkeypatch, tmp_path).test_client()
 
     response = client.post(
         "/api/vacancies",
@@ -148,7 +164,7 @@ def test_vacancy_api_update_delete_filter_and_alert(tmp_path, monkeypatch):
     vacancy.init_vacancy_db()
     profile.save_profile({"name": "Alert User"}, 1)
 
-    client = _load_app().test_client()
+    client = _load_app(monkeypatch, tmp_path, db).test_client()
     created = client.post(
         "/api/vacancies",
         json={

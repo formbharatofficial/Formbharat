@@ -6,13 +6,18 @@ from bs4 import BeautifulSoup
 
 
 def _load_main(monkeypatch, tmp_path):
-    from app import document_vault, profile, verified_profile
+    from app import application_tracker, document_vault, profile, vacancy, verified_profile
 
     db = tmp_path / "formbharat.db"
+    storage = tmp_path / "documents"
+    monkeypatch.setenv("FORMBHARAT_DATABASE_PATH", str(db))
+    monkeypatch.setenv("FORMBHARAT_STORAGE_DIR", str(storage))
+    monkeypatch.setattr(vacancy, "DB_PATH", db)
+    monkeypatch.setattr(application_tracker, "DB_PATH", db)
     monkeypatch.setattr(profile, "DB_PATH", db)
-    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
-    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(tmp_path / "documents"))
     monkeypatch.setattr(verified_profile, "DB_PATH", db)
+    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
+    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(storage))
 
     spec = importlib.util.spec_from_file_location(
         "formbharat_test_form_main",
@@ -62,6 +67,8 @@ def test_test_form_sends_html_and_explicit_profile_id(monkeypatch, tmp_path):
     assert "analyzeAndFill" in page
     assert "showResultText" in page
     assert "showAnalysisResult" in page
+    assert "Proposed:" in page
+    assert "Withheld:" in page
 
 
 def test_root_form_sends_html_and_explicit_profile_id(monkeypatch, tmp_path):
@@ -70,6 +77,7 @@ def test_root_form_sends_html_and_explicit_profile_id(monkeypatch, tmp_path):
 
     _assert_analyze_contract(page, "rootForm")
     assert "analyzeForm" in page
+    assert "Submitted: false" in page
     assert "showRootResult" in page
     assert "const profile =" not in page
     assert "profile: profile" not in page

@@ -62,11 +62,14 @@ def test_mother_name_is_allowed_for_dedicated_profile_value():
     assert result["purpose"] == "mother_name"
 
 
-def test_guardian_name_is_blocked():
-    result = ai.match("Guardian Name")
+def test_guardian_name_uses_its_own_field_and_spouse_stays_blocked():
+    guardian = ai.match("Guardian Name")
+    spouse = ai.match("Husband Name")
 
-    assert result["blocked"] is True
-    assert result["purpose"] == "blocked"
+    assert guardian["blocked"] is False
+    assert guardian["purpose"] == "guardian_name"
+    assert spouse["blocked"] is True
+    assert spouse["purpose"] == "blocked"
 
 
 def test_otp_is_blocked():

@@ -30,6 +30,11 @@ def match_profile_to_fields(fields, profile):
             "mothername",
         ],
 
+        "guardian_name": [
+            "guardian_name",
+            "guardianname",
+        ],
+
         "email": [
             "email",
             "email_id", "mail_id",
@@ -113,9 +118,6 @@ def match_profile_to_fields(fields, profile):
 
     # Name-like fields which belong to another person.
     related_name_terms = [
-        "guardian",
-        "guardian_name",
-        "guardianname",
         "husband",
         "husband_name",
         "husbandname",
@@ -184,9 +186,9 @@ def match_profile_to_fields(fields, profile):
             continue
         # SAFETY BLOCK: OTHER RELATED PERSON'S NAME
         #
-        # father_name and mother_name are deliberately not included here.
-        # They can only match their same-named, explicit profile values via
-        # the aliases above; they can never fall back to the user's name.
+        # father_name, mother_name, and guardian_name are deliberately not
+        # included here. Each matches only its own explicit profile value.
+        # An empty guardian, or one equal to the applicant name, is not used.
 
         # --------------------------------------------------
         # SAFETY BLOCK: OTHER PERSON'S NAME
@@ -265,6 +267,24 @@ def match_profile_to_fields(fields, profile):
         # --------------------------------------------------
         # APPLY PROFILE VALUE
         # --------------------------------------------------
+
+        if matched_key == "guardian_name" and isinstance(profile, dict):
+            guardian_value = str(profile.get("guardian_name") or "").strip()
+            applicant_name = str(profile.get("name") or "").strip()
+            same_person = (
+                guardian_value
+                and applicant_name
+                and guardian_value.casefold() == applicant_name.casefold()
+            )
+            if not guardian_value or same_person:
+                item["profile_key"] = "guardian_name"
+                item["profile_value"] = None
+                item["matched"] = False
+                item["match_confidence"] = (
+                    "blocked" if same_person else "low"
+                )
+                result.append(item)
+                continue
 
         if (
             matched_key

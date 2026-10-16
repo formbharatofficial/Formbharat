@@ -9,7 +9,7 @@ MAX_PROFILES = 5
 
 PROFILE_FIELDS = (
     "name", "email", "mobile", "dob", "address", "country",
-    "father_name", "mother_name",
+    "father_name", "mother_name", "guardian_name",
     "gender", "nationality", "category", "state", "district", "pincode",
     "tenth_roll_number", "tenth_passing_year", "tenth_marks", "tenth_percentage",
     "twelfth_roll_number", "twelfth_passing_year", "twelfth_marks", "twelfth_percentage",
@@ -23,7 +23,7 @@ BASE_PROFILE_FIELDS = PROFILE_FIELDS[:6]
 OPTIONAL_PROFILE_FIELDS = PROFILE_FIELDS[6:]
 PROFILE_DEFAULTS = {
     "name": "", "email": "", "mobile": "", "dob": "", "address": "",
-    "country": "in", "father_name": "", "mother_name": "",
+    "country": "in", "father_name": "", "mother_name": "", "guardian_name": "",
     "gender": "", "nationality": "", "category": "", "state": "",
     "district": "", "pincode": "",
     "tenth_roll_number": "", "tenth_passing_year": "", "tenth_marks": "",
@@ -65,6 +65,7 @@ def _profile_table_sql(table_name="profile"):
             country TEXT NOT NULL DEFAULT 'in',
             father_name TEXT NOT NULL DEFAULT '',
             mother_name TEXT NOT NULL DEFAULT '',
+            guardian_name TEXT NOT NULL DEFAULT '',
             gender TEXT NOT NULL DEFAULT '',
             nationality TEXT NOT NULL DEFAULT '',
             category TEXT NOT NULL DEFAULT '',
@@ -139,6 +140,14 @@ def init_db():
             }
             if _needs_migration(table[0], columns):
                 _migrate_profile_table(conn, columns)
+
+        owner_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(profile)")
+        }
+        if "owner_user_id" not in owner_columns:
+            conn.execute(
+                "ALTER TABLE profile ADD COLUMN owner_user_id INTEGER"
+            )
 
         conn.commit()
     except Exception:

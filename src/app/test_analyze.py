@@ -11,13 +11,18 @@ HTML = "<form><input id='name' name='name' type='text'></form>"
 
 @pytest.fixture
 def main(monkeypatch, tmp_path):
-    from app import document_vault, verified_profile
+    from app import application_tracker, document_vault, vacancy, verified_profile
 
     db = tmp_path / "formbharat.db"
+    storage = tmp_path / "documents"
+    monkeypatch.setenv("FORMBHARAT_DATABASE_PATH", str(db))
+    monkeypatch.setenv("FORMBHARAT_STORAGE_DIR", str(storage))
+    monkeypatch.setattr(vacancy, "DB_PATH", db)
+    monkeypatch.setattr(application_tracker, "DB_PATH", db)
     monkeypatch.setattr(profile_module, "DB_PATH", db)
-    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
-    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(tmp_path / "documents"))
     monkeypatch.setattr(verified_profile, "DB_PATH", db)
+    monkeypatch.setattr(document_vault, "DB_PATH", str(db))
+    monkeypatch.setattr(document_vault, "STORAGE_DIR", str(storage))
 
     spec = importlib.util.spec_from_file_location(
         "formbharat_analyze_main",
@@ -128,3 +133,69 @@ def test_analyze_uses_the_verified_profile_for_profile_id(main):
         "skipped_count",
     ):
         assert key in result
+
+
+def test_analyze_review_withholds_invalid_verified_values(main):
+    from app import verified_profile
+
+    verified_profile.save_verified_profile(
+        {
+            "name": "Verified One",
+            "email": "not-an-email",
+            "dob": "31-02-1991",
+            "pincode": "12345",
+        },
+        profile_id=1,
+        verified=True,
+    )
+
+    response = _post(main, {
+        "profile_id": 1,
+        "html": """
+        <form>
+          <input id="name" name="name" type="text">
+          <input id="email" name="email" type="email">
+          <input id="dob" name="dob" type="date">
+          <input id="pincode" name="pincode" type="text">
+          <input id="otp" name="otp" type="text">
+          <button type="submit">Submit</button>
+        </form>
+        """,
+    })
+    result = response.get_json()["result"]
+
+    assert response.status_code == 200
+    assert result["submitted"] is False
+    assert result["filled"] == [
+        {"field": "name", "profile_key": "name", "value": "Verified One"}
+    ]
+    assert result["review"]["submitted"] is False
+    assert result["review"]["proposed"] == result["filled"]
+    reasons = {
+        item["field"]: item["reason"] for item in result["review"]["withheld"]
+    }
+    assert reasons["email"] == "invalid"
+    assert reasons["dob"] == "invalid"
+    assert reasons["pincode"] == "invalid"
+    assert reasons["otp"] == "blocked"
+    assert "not-an-email" not in result["filled_html"]
+
+
+def test_analyze_does_not_fill_an_unverified_saved_profile(main):
+    from app import verified_profile
+
+    verified_profile.save_verified_profile(
+        {"name": "Not Verified"},
+        profile_id=1,
+        verified=False,
+    )
+
+    response = _post(main, {"profile_id": 1, "html": HTML})
+    result = response.get_json()["result"]
+
+    assert response.status_code == 200
+    assert result["verified_profile"] is False
+    assert result["filled"] == []
+    assert result["review"]["proposed"] == []
+    assert result["submitted"] is False
+    assert "Not Verified" not in result["filled_html"]

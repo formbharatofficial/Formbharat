@@ -161,6 +161,31 @@ def get_vacancy_api(vacancy_id):
         }), 500
 
 
+@app.route("/api/vacancies/<int:vacancy_id>/eligibility", methods=["GET"])
+def vacancy_eligibility_api(vacancy_id):
+    """Report explicit criteria only. Free text stays unknown."""
+    from app.eligibility import assess_eligibility
+
+    vacancy = get_vacancy(vacancy_id)
+    if vacancy is None:
+        return jsonify({
+            "success": False,
+            "error": "Vacancy not found",
+        }), 404
+    profile_id = request.args.get("profile_id", default=1, type=int)
+    try:
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
+        profile = get_verified_profile(profile_id)
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+    result = assess_eligibility(vacancy, profile)
+    result["success"] = True
+    result["authenticated_account"] = _access_flags()["authenticated_account"]
+    return jsonify(result)
+
+
 @app.route("/api/vacancies/<int:vacancy_id>", methods=["PUT"])
 def update_vacancy_api(vacancy_id):
     data = request.get_json(silent=True)
@@ -210,6 +235,9 @@ def create_vacancy_alert_api(vacancy_id):
         profile_id = data.get("profile_id")
         if not profile_exists(profile_id):
             raise ValueError("profile_id must refer to an existing profile")
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         alert = create_vacancy_alert(profile_id, vacancy_id)
         return jsonify({"success": True, "alert": alert}), 201
     except (TypeError, ValueError) as error:
@@ -221,6 +249,9 @@ def list_vacancy_alerts_api(profile_id):
     try:
         if not 1 <= profile_id <= 5:
             raise ValueError("profile_id must be an integer between 1 and 5")
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         return jsonify({
             "success": True,
             "alerts": list_vacancy_alerts(profile_id)
@@ -238,6 +269,20 @@ def _require_saved_profile(profile_id):
         raise ValueError("profile_id must refer to an existing profile")
 
 
+def _deny_slot(profile_id):
+    from app.ownership import guard_response
+    return guard_response(profile_id)
+
+
+def _access_flags():
+    from app.ownership import current_user_id
+    logged_in = current_user_id() is not None
+    return {
+        "authenticated_account": logged_in,
+        "access": "account" if logged_in else "profile_slot",
+    }
+
+
 def _vacancy_id_for_application(data):
     if data.get("vacancy_id") in (None, ""):
         return None
@@ -247,6 +292,18 @@ def _vacancy_id_for_application(data):
     if get_vacancy(vacancy_id) is None:
         raise LookupError("Vacancy not found")
     return vacancy_id
+
+
+def _attach_vacancy_reference(application):
+    if not isinstance(application, dict) or not application.get("vacancy_id"):
+        return application
+    vacancy = get_vacancy(application["vacancy_id"])
+    if not vacancy:
+        return application
+    linked = dict(application)
+    linked["official_link"] = vacancy.get("official_link") or ""
+    linked["deadline"] = vacancy.get("application_end") or ""
+    return linked
 
 
 def _application_for_profile(profile_id, application_id):
@@ -268,6 +325,9 @@ def create_application_api():
     try:
         profile_id = data.get("profile_id")
         _require_saved_profile(profile_id)
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         vacancy_id = _vacancy_id_for_application(data)
         application = create_application(
             profile_id,
@@ -277,7 +337,10 @@ def create_application_api():
             status=data.get("status") or "draft",
             note=str(data.get("note", "")).strip(),
         )
-        return jsonify({"success": True, "application": application}), 201
+        return jsonify({
+            "success": True,
+            "application": _attach_vacancy_reference(application),
+        }), 201
     except LookupError as error:
         return jsonify({"success": False, "error": str(error)}), 404
     except (TypeError, ValueError) as error:
@@ -288,12 +351,19 @@ def create_application_api():
 def list_applications_api(profile_id):
     try:
         _require_saved_profile(profile_id)
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         status = request.args.get("status")
         if status == "":
             status = None
         return jsonify({
             "success": True,
-            "applications": list_applications(profile_id, status=status),
+            **_access_flags(),
+            "applications": [
+                _attach_vacancy_reference(item)
+                for item in list_applications(profile_id, status=status)
+            ],
         })
     except ValueError as error:
         return jsonify({"success": False, "error": str(error)}), 400
@@ -305,6 +375,9 @@ def list_applications_api(profile_id):
 )
 def get_application_api(profile_id, application_id):
     try:
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         application = _application_for_profile(profile_id, application_id)
     except ValueError as error:
         return jsonify({"success": False, "error": str(error)}), 400
@@ -313,7 +386,10 @@ def get_application_api(profile_id, application_id):
             "success": False,
             "error": "Application not found"
         }), 404
-    return jsonify({"success": True, "application": application})
+    return jsonify({
+        "success": True,
+        "application": _attach_vacancy_reference(application),
+    })
 
 
 @app.route(
@@ -328,6 +404,9 @@ def update_application_status_api(profile_id, application_id):
             "error": "Invalid or missing JSON data"
         }), 400
     try:
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         if _application_for_profile(profile_id, application_id) is None:
             return jsonify({
                 "success": False,
@@ -343,7 +422,10 @@ def update_application_status_api(profile_id, application_id):
                 "success": False,
                 "error": "Application not found"
             }), 404
-        return jsonify({"success": True, "application": application})
+        return jsonify({
+            "success": True,
+            "application": _attach_vacancy_reference(application),
+        })
     except ValueError as error:
         return jsonify({"success": False, "error": str(error)}), 400
 
@@ -354,6 +436,9 @@ def update_application_status_api(profile_id, application_id):
 )
 def application_history_api(profile_id, application_id):
     try:
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         if _application_for_profile(profile_id, application_id) is None:
             return jsonify({
                 "success": False,
@@ -386,6 +471,9 @@ def upload_profile_media(profile_id, media_type):
             "success": False,
             "error": "profile_id must refer to an existing valid profile"
         }), 400
+    denied = _deny_slot(profile_id)
+    if denied is not None:
+        return denied
 
     media_type = str(media_type).strip().lower()
     if media_type not in ("photo", "signature"):
@@ -432,8 +520,14 @@ def upload_profile_media(profile_id, media_type):
         media_dir, f"{media_type}_{digest}.{ext}"
     )
 
-    with open(storage_path, "wb") as f:
-        f.write(data)
+    from app.document_encryption import DocumentStorageError, store_bytes
+    try:
+        stored_bytes = store_bytes(data)
+    except DocumentStorageError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+    with open(storage_path, "wb") as handle:
+        handle.write(stored_bytes)
 
     from app.document_vault import get_db, _generate_document_reference
     from datetime import datetime
@@ -529,6 +623,12 @@ if register_profile_ui:
     except Exception as e:
         print("Profile UI warning:", e)
 
+try:
+    from app.accounts import register_account_routes
+    register_account_routes(app)
+except Exception as e:
+    print("Account warning:", e)
+
 
 
 # --------------------------------------------------
@@ -538,6 +638,9 @@ if register_profile_ui:
 @app.route("/api/profile/<int:profile_id>/verified", methods=["GET", "POST"])
 def verified_profile_api(profile_id):
     try:
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
         if request.method == "POST":
             data = request.get_json(silent=True)
             if not isinstance(data, dict):
@@ -885,6 +988,41 @@ function showAnalysisResult(resultData) {
 
     result.appendChild(pre);
 
+    addLine(
+        "Review before you submit:",
+        "Final submit stays with you"
+    );
+
+    const reviewData = resultData.review || {};
+
+    (reviewData.proposed || []).forEach(function(item) {
+
+        addLine(
+            "Proposed:",
+            (item.field || "") + " = " + (item.value || "")
+        );
+
+    });
+
+    (reviewData.withheld || []).forEach(function(item) {
+
+        addLine(
+            "Withheld:",
+            (item.field || "") + " (" + (item.reason || "") + ")"
+        );
+
+    });
+
+    const review = document.createElement("pre");
+
+    review.textContent = JSON.stringify(
+        resultData.review || {},
+        null,
+        2
+    );
+
+    result.appendChild(review);
+
 }
 
 async function analyzeAndFill() {
@@ -1175,6 +1313,8 @@ PAGE = """
 
     <div class="card">
         <h2>Dashboard</h2>
+        <p class="fb-note">OTP, CAPTCHA, and final Submit stay with you.</p>
+        <p class="fb-note">Account login is not enabled. These screens use local profile slots.</p>
         <div class="actions">
             <a href="/profile">Profile</a>
             <a href="/documents">Documents</a>
@@ -1367,9 +1507,23 @@ async function analyzeForm() {
                 "Analysis successful ✓"
             );
 
-            showRootResult(
-                JSON.stringify(data.result, null, 2)
-            );
+            const review = (data.result && data.result.review) || {};
+            const lines = [
+                "Review before you submit. Final submit stays with you."
+            ];
+            (review.proposed || []).forEach(function(item) {
+                lines.push(
+                    "Proposed: " + (item.field || "") + " = " + (item.value || "")
+                );
+            });
+            (review.withheld || []).forEach(function(item) {
+                lines.push(
+                    "Withheld: " + (item.field || "") + " (" + (item.reason || "") + ")"
+                );
+            });
+            lines.push("Submitted: false");
+            lines.push(JSON.stringify(data.result, null, 2));
+            showRootResult(lines.join("\n"));
 
         }
 
@@ -1414,19 +1568,47 @@ _MOBILE_NAV_PATHS = {
     "/documents",
     "/vacancies",
     "/applications",
+    "/account",
 }
 
 _MOBILE_NAV = """
+<header class="fb-header">
+<p class="fb-brand">FormBharat</p>
+<p class="fb-tag">Assisted government form filling</p>
+<a href="/account">Account · खाता</a>
+</header>
 <nav class="fb-nav" aria-label="FormBharat">
-<a href="/profile">Profile</a>
-<a href="/documents">Documents</a>
-<a href="/vacancies">Vacancies</a>
-<a href="/applications">Applications</a>
-<a href="/">Form</a>
+<a href="/"><span>Home</span><small>होम</small></a>
+<a href="/profile"><span>Profile</span><small>प्रोफ़ाइल</small></a>
+<a href="/documents"><span>Documents</span><small>दस्तावेज़</small></a>
+<a href="/vacancies"><span>Vacancies</span><small>नौकरी</small></a>
+<a href="/applications"><span>Applications</span><small>आवेदन</small></a>
 </nav>
 <style>
-.fb-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 auto 16px;max-width:700px}
-.fb-nav a{flex:1 1 30%;min-width:6.5rem;box-sizing:border-box;text-align:center;padding:12px 8px;background:#146c43;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px}
+:root{--fb-ink:#1b2a4a;--fb-green:#1f7a3a;--fb-saffron:#e07a12;--fb-paper:#f6f8fb;--fb-line:#d5deea}
+body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--fb-paper);color:var(--fb-ink);margin:0;padding:16px 16px 140px}
+.container{max-width:720px;margin:auto}
+h1,h2{color:var(--fb-ink);letter-spacing:0}
+.fb-header{max-width:720px;margin:0 auto 12px;padding:18px 16px 14px;border-radius:18px;background:linear-gradient(115deg,#fff7ed 0%,#ffffff 48%,#eef8f1 100%);border:1px solid var(--fb-line)}
+.fb-brand{margin:0;font-size:1.35rem;font-weight:800}
+.fb-tag{margin:4px 0 0;color:#5c6b82}
+.fb-nav{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:4px;margin:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--fb-line);box-shadow:0 -6px 18px rgba(27,42,74,.06)}
+.fb-nav a{flex:1 1 0;min-width:0;box-sizing:border-box;text-align:center;padding:8px 2px;background:#fff;color:var(--fb-green);text-decoration:none;border-radius:12px;font-weight:700;font-size:11px;line-height:1.15}
+.fb-nav small{display:block;color:#5c6b82;font-size:11px;font-weight:600}
+.card{background:#fff;border:1px solid var(--fb-line);border-radius:16px;box-shadow:0 8px 24px rgba(27,42,74,.05)}
+label{color:#31415f}
+input,select,textarea{border:1px solid var(--fb-line);border-radius:12px;background:#fff;color:var(--fb-ink)}
+button{background:var(--fb-green);border-radius:12px;min-height:48px;scroll-margin-bottom:120px}
+button:hover{background:#176330}
+.fb-note{margin:8px 0 0;color:#5c6b82}
+.fb-status{display:inline-block;margin:0 0 8px;padding:4px 10px;border-radius:999px;background:#eef8f1;color:var(--fb-green);font-weight:700}
+a{color:var(--fb-green)}
+@media(min-width:900px){
+body{padding:28px 24px 32px}
+.container,.fb-header{max-width:960px}
+.fb-nav{position:static;max-width:960px;margin:0 auto 16px;padding:8px;border:1px solid var(--fb-line);border-radius:16px;box-shadow:none}
+.fb-nav a{font-size:15px;padding:12px 8px}
+}
 </style>
 """
 
@@ -1482,6 +1664,7 @@ a{color:#146c43}
 <body>
 <div class="container">
 <h1>Vacancies</h1>
+<p class="fb-note">These are local profile slots, not signed-in accounts. Official links stay read-only.</p>
 <button type="button" id="refresh">Refresh</button>
 <p id="vacancy-message">Loading vacancies...</p>
 <div id="vacancy-list"></div>
@@ -1508,6 +1691,9 @@ function renderVacancy(item) {
     addLine(card, "Organization:", item.organization);
     addLine(card, "Category:", item.category);
     addLine(card, "Eligibility:", item.eligibility);
+    const eligibilityNote = document.createElement("p");
+    eligibilityNote.textContent = "Eligibility text is not an automatic decision.";
+    card.appendChild(eligibilityNote);
     addLine(card, "Details:", item.description);
     addLine(card, "Opens:", item.application_start);
     addLine(card, "Deadline:", item.application_end);
@@ -1579,6 +1765,7 @@ button{margin-top:12px;background:#146c43;color:#fff;border:0;font-weight:bold}
 <body>
 <div class="container">
 <h1>Applications</h1>
+<p class="fb-note">These are local profile slots, not signed-in accounts. Saving a status here does not submit a government form.</p>
 <label for="profile_id">Profile ID</label>
 <input id="profile_id" type="number" min="1" max="5" inputmode="numeric">
 <button type="button" id="load">Show applications</button>
@@ -1631,8 +1818,13 @@ function renderApplication(item, history) {
     title.textContent = item.title || "Application";
     card.appendChild(title);
     addLine(card, "Organization:", item.organization);
-    addLine(card, "Status:", item.status);
+    const status = document.createElement("p");
+    status.className = "fb-status";
+    status.textContent = item.status || "";
+    card.appendChild(status);
     addLine(card, "Vacancy:", item.vacancy_id);
+    addLine(card, "Deadline:", item.deadline);
+    addLine(card, "Official link:", item.official_link);
     addLine(card, "Updated:", item.updated_at);
     card.appendChild(renderHistory(history));
     return card;
@@ -1698,6 +1890,25 @@ def applications_page():
 # Health check
 # --------------------------------------------------
 
+@app.route("/api/access")
+def access_api():
+    from app.access_boundary import slot_access
+    from app.document_encryption import encryption_status
+
+    payload = slot_access()
+    payload.update(_access_flags())
+    if payload["authenticated_account"]:
+        payload["account_note"] = (
+            "This session is an account. It can use only slots it owns."
+        )
+    return jsonify({
+        "success": True,
+        **payload,
+        "legacy_claim": "explicit_empty_slot_only",
+        "documents": encryption_status(),
+    })
+
+
 @app.route("/health")
 def health():
 
@@ -1713,6 +1924,48 @@ def health():
 # --------------------------------------------------
 
 MAX_ANALYZE_HTML_BYTES = 1_000_000
+
+
+@app.route("/api/local-assist", methods=["POST"])
+def local_assist_api():
+    """Read a local file page for one verified profile slot.
+
+    The request cannot supply profile values. Reread returns the DOM
+    of the page already open in that slot. Nothing is submitted.
+    """
+    from app.browser import BrowserSession
+    from app.rendered_assist import run_local_assist
+
+    data = request.get_json(silent=True)
+    if isinstance(data, dict) and data.get("profile_id") is not None:
+        try:
+            denied = _deny_slot(data.get("profile_id"))
+        except (TypeError, ValueError):
+            denied = None
+        if denied is not None:
+            return denied
+    try:
+        result = run_local_assist(
+            data,
+            app.extensions.setdefault("local_browser_sessions", {}),
+            BrowserSession,
+        )
+    except ValueError as error:
+        return jsonify({
+            "success": False,
+            "error": str(error),
+            "submitted": False,
+        }), 400
+    except Exception as error:
+        from app.ownership import SlotAccessError
+        if isinstance(error, SlotAccessError):
+            return jsonify({
+                "success": False,
+                "error": str(error),
+                "submitted": False,
+            }), 403
+        raise
+    return jsonify(result)
 
 
 @app.route("/analyze", methods=["POST"])
@@ -1750,6 +2003,10 @@ def analyze():
                 "success": False,
                 "error": "profile_id must be an integer between 1 and 5"
             }), 400
+
+        denied = _deny_slot(profile_id)
+        if denied is not None:
+            return denied
 
         profile = get_verified_profile(profile_id)
 
@@ -1816,6 +2073,10 @@ def analyze():
             profile
         )
 
+        from app.rendered_assist import apply_fill_boundaries, build_review
+
+        withheld = apply_fill_boundaries(matched_fields)
+
         result["fields_detected"] = len(fields)
         result["fields"] = analyzed_fields
         result["matched_fields"] = matched_fields
@@ -1838,6 +2099,8 @@ def analyze():
         result["skipped"] = fill_result["skipped"]
         result["filled_count"] = fill_result["filled_count"]
         result["skipped_count"] = fill_result["skipped_count"]
+        result["review"] = build_review(fill_result["filled"], withheld)
+        result["submitted"] = False
 
         # --------------------------------------------------
         # Existing AI engine
