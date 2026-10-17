@@ -22,8 +22,12 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 <body>
 <div class="container">
 <div class="card">
-<h1>FormBharat 👤</h1>
-<p>My Profile</p>
+<h1>My Profile</h1>
+<p>Apni personal information manage karein</p>
+<div class="fb-meter">
+<p><strong>Bhare hue fields {{ complete }}%</strong></p>
+<i style="--fb-fill: {{ complete }}%"></i>
+</div>
 
 {% if saved %}
 <div class="success">✓ Profile saved successfully</div>
@@ -32,6 +36,7 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
+<h2 class="fb-section fb-sec-personal">Personal Details</h2>
 <label>Full Name</label>
 <input name="name" value="{{ profile.name }}" placeholder="Enter your name">
 
@@ -50,9 +55,11 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 <label>Nationality</label>
 <input name="nationality" value="{{ profile.nationality }}" placeholder="Nationality">
 
+<h2 class="fb-section fb-sec-category">Category &amp; Other Information</h2>
 <label>Category</label>
 <input name="category" value="{{ profile.category }}" placeholder="General / OBC / SC / ST / EWS">
 
+<h2 class="fb-section fb-sec-family">Family Details</h2>
 <label>Father Name</label>
 <input name="father_name" value="{{ profile.father_name }}" placeholder="Father's name">
 
@@ -63,6 +70,7 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 <input name="guardian_name" value="{{ profile.guardian_name }}" placeholder="Only if different from father and mother">
 <p>खाली रहने पर guardian नहीं भरा जाता। यह आपका अपना नाम नहीं है।</p>
 
+<h2 class="fb-section fb-sec-address">Address Details</h2>
 <label>Address</label>
 <input name="address" value="{{ profile.address }}" placeholder="Full address">
 
@@ -75,6 +83,7 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 <label>Pincode</label>
 <input name="pincode" value="{{ profile.pincode }}" placeholder="Pincode">
 
+<h2 class="fb-section fb-sec-education">Education Details</h2>
 <label>10th Roll Number</label>
 <input name="tenth_roll_number" value="{{ profile.tenth_roll_number }}">
 
@@ -154,7 +163,7 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 <option value="us" {% if profile.country == "us" %}selected{% endif %}>USA</option>
 </select>
 
-<button type="submit">Save Profile</button>
+<button type="submit">Save Changes</button>
 </form>
 </div>
 </div>
@@ -162,9 +171,66 @@ button{width:100%;margin-top:20px;padding:14px;background:#146c43;color:white;bo
 </html>
 """
 
+_PROGRESS_FIELDS = (
+    "name",
+    "email",
+    "mobile",
+    "dob",
+    "gender",
+    "nationality",
+    "category",
+    "father_name",
+    "mother_name",
+    "guardian_name",
+    "address",
+    "state",
+    "district",
+    "pincode",
+    "tenth_roll_number",
+    "tenth_passing_year",
+    "tenth_marks",
+    "tenth_percentage",
+    "twelfth_roll_number",
+    "twelfth_passing_year",
+    "twelfth_marks",
+    "twelfth_percentage",
+    "graduation_degree",
+    "graduation_roll_number",
+    "graduation_passing_year",
+    "graduation_marks",
+    "graduation_percentage",
+    "post_graduation_degree",
+    "post_graduation_roll_number",
+    "post_graduation_passing_year",
+    "post_graduation_marks",
+    "post_graduation_percentage",
+    "diploma_name",
+    "diploma_roll_number",
+    "diploma_passing_year",
+    "diploma_marks",
+    "diploma_percentage",
+    "other_qualification",
+)
+
+
+def _filled_percent(profile):
+    filled = sum(
+        1
+        for key in _PROGRESS_FIELDS
+        if str(profile.get(key) or "").strip()
+    )
+    return round(100 * filled / len(_PROGRESS_FIELDS))
+
+
 def register_profile_ui(app):
     init_db()
-    from app.ownership import SlotAccessError, assert_slot_access, guard_response
+    from app.ownership import (
+        SlotAccessError,
+        assert_slot_access,
+        current_user_id,
+        guard_response,
+        owned_slot_for_session,
+    )
 
     def profile_id_from_path(profile_id):
         try:
@@ -172,10 +238,16 @@ def register_profile_ui(app):
         except (TypeError, ValueError):
             raise ValueError("profile_id must be an integer between 1 and 5")
 
+    def selected_slot():
+        if current_user_id() is None:
+            assert_slot_access(1)
+            return 1
+        return owned_slot_for_session()
+
     @app.route("/profile", methods=["GET", "POST"])
     def profile_page():
         try:
-            assert_slot_access(1)
+            slot = selected_slot()
         except SlotAccessError as error:
             return render_template_string(
                 "<p>{{ message }}</p><p><a href='/account'>Account</a></p>",
@@ -223,15 +295,18 @@ def register_profile_ui(app):
                 "diploma_marks": request.form.get("diploma_marks", ""),
                 "diploma_percentage": request.form.get("diploma_percentage", ""),
                 "other_qualification": request.form.get("other_qualification", ""),
-            })
+            }, slot)
+            from app.verified_profile import save_verified_profile
+            save_verified_profile(get_profile(slot), slot, verified=True)
             return redirect(url_for("profile_page", saved=1))
 
-        profile = get_profile()
+        profile = get_profile(slot)
         return render_template_string(
             PROFILE_PAGE,
             profile=profile,
             saved=request.args.get("saved") == "1",
             csrf_token=issue_csrf_token(),
+            complete=_filled_percent(profile),
         )
 
     @app.route("/api/profile/<profile_id>", methods=["GET"])

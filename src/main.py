@@ -274,6 +274,17 @@ def _deny_slot(profile_id):
     return guard_response(profile_id)
 
 
+def _viewer_slot():
+    from app.ownership import SlotAccessError, current_user_id, owned_slot_for_session
+
+    if current_user_id() is None:
+        return 1
+    try:
+        return owned_slot_for_session()
+    except SlotAccessError:
+        return ""
+
+
 def _access_flags():
     from app.ownership import current_user_id
     logged_in = current_user_id() is not None
@@ -801,23 +812,18 @@ pre {
 
 <div class="container">
 
-<h1>FormBharat 🇮🇳</h1>
+<h1>Auto Fill Form</h1>
+<p>Pehle My Profile me apni jaankari bharo. Phir yahan dekho kaun se fields bhar sakte hain. OTP, CAPTCHA, payment aur final Submit aap khud karenge.</p>
 
 <div class="card">
 
-<h2>AI Form Filling Test</h2>
-
-<label for="profile_id">
-Profile ID
-</label>
+<h2>Local form par check karein</h2>
 
 <input
     id="profile_id"
     name="profile_id"
-    type="number"
-    min="1"
-    max="5"
-    inputmode="numeric"
+    type="hidden"
+    value="{{ profile_slot }}"
 >
 
 <form id="testForm">
@@ -1133,7 +1139,11 @@ async function analyzeAndFill() {
             );
         }
 
-        showStatus("✅ Form analyzed and filled successfully");
+        if ((result.filled_count || 0) > 0) {
+            showStatus("Profile ki details form me bhar di gayi hain. Submit aap karenge.");
+        } else {
+            showStatus("Pehle My Profile me naam aur details save karo. Khali profile se form nahi bharta.");
+        }
 
         showAnalysisResult(result);
 
@@ -1296,38 +1306,103 @@ PAGE = """
             word-wrap: break-word;
         }
 
+        .fb-splash{position:fixed;inset:0;z-index:80;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+        .fb-splash.is-done{opacity:0;transition:opacity .45s ease;pointer-events:none}
+        .fb-splash .fb-mark{width:120px;height:104px}
+        .fb-splash .fb-word{margin:8px 0 0;font-size:2.05rem;font-weight:800;letter-spacing:-.04em;line-height:1}
+        .fb-splash .fb-word span:first-child{color:#12833a}
+        .fb-splash .fb-word span:last-child{color:#ef8b14}
+        .fb-splash .fb-tagline{margin:8px 0 0;color:#1d4e89;font-weight:700;line-height:1.35}
+        .fb-splash .fb-bar{width:128px;height:7px;margin-top:22px;border-radius:99px;background:linear-gradient(90deg,#ff9933 0 34%,#f4f7fb 34% 66%,#138a3a 66%);overflow:hidden;position:relative}
+        .fb-splash .fb-bar i{position:absolute;inset:0 auto 0 0;width:0;background:rgba(255,255,255,.55);animation:fbload 2.6s ease forwards}
+        .fb-splash .fb-next{margin:14px 0 0;color:#1d4e89;font-weight:700}
+        .fb-kept{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+        .fb-wave-top,.fb-wave-bottom{position:absolute;left:0;width:100%;pointer-events:none}
+        .fb-wave-top{top:0;height:170px}
+        .fb-wave-bottom{bottom:0;height:150px}
+        @keyframes fbload{to{width:100%}}
+
     </style>
 
 </head>
 
 
-<body>
+<body data-signed-in="{{ '1' if signed_in else '0' }}">
+
+<div class="fb-splash" id="fb-splash">
+<svg class="fb-wave-top" viewBox="0 0 400 170" preserveAspectRatio="none" aria-hidden="true"><path d="M0 0h230C180 50 150 90 210 140 120 50 60 20 0 90Z" fill="#ff9a1f"/><path d="M0 0h150C140 60 90 90 70 150 40 80 10 40 0 100Z" fill="#ffb24d"/></svg>
+<svg class="fb-wave-bottom" viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true"><path d="M0 36c80-28 150 12 220 18 80 6 120-16 180-22v118H0Z" fill="#ff9933"/><path d="M0 68c80-24 150 10 220 14 70 4 120-12 180-16v84H0Z" fill="#fff"/><path d="M0 102c70-20 150 8 220 10 70 2 120-8 180-12v50H0Z" fill="#138808"/></svg>
+<svg class="fb-mark" viewBox="0 0 140 120" aria-hidden="true"><rect x="40" y="14" width="44" height="56" rx="5" fill="none" stroke="#1b4f9c" stroke-width="4.5"/><path d="M50 30h24M50 39h24M50 48h15" stroke="#1b4f9c" stroke-width="3" stroke-linecap="round"/><path d="M16 84c24-36 52-38 84-8" fill="none" stroke="#f58220" stroke-width="9" stroke-linecap="round"/><path d="M22 100c24-28 54-24 78 8" fill="none" stroke="#14913d" stroke-width="9" stroke-linecap="round"/><g transform="translate(98,44)"><circle r="16" fill="#fff" stroke="#0a3d91" stroke-width="2"/><circle r="3.2" fill="#0a3d91"/><circle r="11.5" fill="none" stroke="#0a3d91" stroke-width="1.3" stroke-dasharray="1.5 2.3"/></g></svg>
+<p class="fb-word"><span>Form</span><span>Bharat</span></p>
+<p class="fb-tagline">Government Forms,<br>Ab aur bhi Aasaan</p>
+<div class="fb-bar" aria-hidden="true"><i></i></div>
+<p class="fb-next" id="fb-next"></p>
+</div>
+<script>
+(function () {
+    var splash = document.getElementById("fb-splash");
+    if (!splash) return;
+    var signedIn = document.body.getAttribute("data-signed-in") === "1";
+    var next = document.getElementById("fb-next");
+    if (next) {
+        next.textContent = signedIn ? "Home khul raha hai" : "Agle pal login khulega";
+    }
+    var seen = false;
+    try {
+        seen = sessionStorage.getItem("fb-opened") === "1";
+    } catch (error) {}
+    function go() {
+        try { sessionStorage.setItem("fb-opened", "1"); } catch (error) {}
+        if (!signedIn) {
+            window.location.replace("/account");
+            return;
+        }
+        splash.classList.add("is-done");
+        setTimeout(function () { splash.remove(); }, 500);
+    }
+    if (seen) {
+        go();
+        return;
+    }
+    setTimeout(go, 2800);
+})();
+</script>
 
 <div class="container">
 
-    <h1>FormBharat 🇮🇳</h1>
-
-    <div class="subtitle">
-        AI Assisted Form Filling
-    </div>
-
-    <div class="card">
-        <h2>Dashboard</h2>
+    <section class="card fb-hero">
+        <svg class="fb-logo" viewBox="0 0 88 88" aria-hidden="true">
+            <rect x="24" y="20" width="30" height="40" rx="4" fill="#1d4e89"/>
+            <path d="M30 32h16M30 38h16M30 44h10" stroke="#fff" stroke-width="2"/>
+            <path d="M18 56c14-18 34-18 52-2" fill="none" stroke="#ff9933" stroke-width="5" stroke-linecap="round"/>
+            <path d="M20 64c14-14 34-12 50 4" fill="none" stroke="#138a3a" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="60" cy="36" r="11" fill="#fff" stroke="#0a3d91" stroke-width="2"/>
+            <circle cx="60" cy="36" r="3" fill="#0a3d91"/>
+        </svg>
+        <p class="fb-kicker">Dashboard · Ek Profile · Sabhi Forms · Kam Samay</p>
+        <h1>Government Forms,<br>Ab aur bhi Aasaan</h1>
         <p class="fb-note">OTP, CAPTCHA, and final Submit stay with you.</p>
-        <p class="fb-note">Account login is not enabled. These screens use local profile slots.</p>
-        <div class="actions">
-            <a href="/profile">Profile</a>
-            <a href="/documents">Documents</a>
-            <a href="/vacancies">Vacancies</a>
-            <a href="/applications">Applications</a>
-            <a href="/test-form">Form Filling</a>
-        </div>
+        <p class="fb-note">Sign in from Account. Khali slot My Profile par milta hai. Purani profile Account se khud jod sakte hain.</p>
+    </section>
+    <div class="fb-tiles">
+        <a class="fb-tile fb-mint" href="/profile"><i class="fb-ico">P</i><div><strong>My Profile</strong><span>Apni personal information manage karein</span></div></a>
+        <a class="fb-tile fb-sky" href="/test-form"><i class="fb-ico">A</i><div><strong>Auto Fill Form</strong><span>Pehle profile, phir form. OTP aur Submit aap karenge</span></div></a>
     </div>
+    <div class="fb-row">
+        <a href="/documents">Documents Manage</a>
+        <a href="/vacancies">Find Vacancies</a>
+        <a href="/applications">My Applications</a>
+    </div>
+    <section class="fb-rule">
+        <strong>Rules &amp; Regulations</strong>
+        <p class="fb-note">Form filling yahin rukta hai jahan site password, OTP, CAPTCHA, payment ya final Submit maange.</p>
+    </section>
 
 
-    <div class="card">
+    <div class="card fb-kept">
 
-        <h2>Test Form</h2>
+        <h2>Local form check</h2>
+        <p class="fb-note">Yahin saved profile se fields match hote hain. Site khud submit nahi hoti.</p>
 
         <label for="profile_id">
             Profile ID
@@ -1403,7 +1478,7 @@ PAGE = """
     </div>
 
 
-    <div class="card">
+    <div class="card fb-kept">
 
         <h2>AI Result</h2>
 
@@ -1573,9 +1648,9 @@ _MOBILE_NAV_PATHS = {
 
 _MOBILE_NAV = """
 <header class="fb-header">
-<p class="fb-brand">FormBharat</p>
-<p class="fb-tag">Assisted government form filling</p>
-<a href="/account">Account · खाता</a>
+<a class="fb-brand" href="/"><span>Form</span><span>Bharat</span></a>
+<a class="fb-account" href="/account">खाता</a>
+<i class="fb-ribbon"></i>
 </header>
 <nav class="fb-nav" aria-label="FormBharat">
 <a href="/"><span>Home</span><small>होम</small></a>
@@ -1584,30 +1659,69 @@ _MOBILE_NAV = """
 <a href="/vacancies"><span>Vacancies</span><small>नौकरी</small></a>
 <a href="/applications"><span>Applications</span><small>आवेदन</small></a>
 </nav>
+<svg class="fb-flag-wave" viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true"><path d="M0 36c80-28 150 12 220 18 80 6 120-16 180-22v118H0Z" fill="#ff9933"/><path d="M0 68c80-24 150 10 220 14 70 4 120-12 180-16v84H0Z" fill="#fff"/><path d="M0 102c70-20 150 8 220 10 70 2 120-8 180-12v50H0Z" fill="#138808"/></svg>
 <style>
-:root{--fb-ink:#1b2a4a;--fb-green:#1f7a3a;--fb-saffron:#e07a12;--fb-paper:#f6f8fb;--fb-line:#d5deea}
-body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--fb-paper);color:var(--fb-ink);margin:0;padding:16px 16px 140px}
-.container{max-width:720px;margin:auto}
-h1,h2{color:var(--fb-ink);letter-spacing:0}
-.fb-header{max-width:720px;margin:0 auto 12px;padding:18px 16px 14px;border-radius:18px;background:linear-gradient(115deg,#fff7ed 0%,#ffffff 48%,#eef8f1 100%);border:1px solid var(--fb-line)}
-.fb-brand{margin:0;font-size:1.35rem;font-weight:800}
-.fb-tag{margin:4px 0 0;color:#5c6b82}
-.fb-nav{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:4px;margin:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--fb-line);box-shadow:0 -6px 18px rgba(27,42,74,.06)}
-.fb-nav a{flex:1 1 0;min-width:0;box-sizing:border-box;text-align:center;padding:8px 2px;background:#fff;color:var(--fb-green);text-decoration:none;border-radius:12px;font-weight:700;font-size:11px;line-height:1.15}
-.fb-nav small{display:block;color:#5c6b82;font-size:11px;font-weight:600}
-.card{background:#fff;border:1px solid var(--fb-line);border-radius:16px;box-shadow:0 8px 24px rgba(27,42,74,.05)}
-label{color:#31415f}
-input,select,textarea{border:1px solid var(--fb-line);border-radius:12px;background:#fff;color:var(--fb-ink)}
-button{background:var(--fb-green);border-radius:12px;min-height:48px;scroll-margin-bottom:120px}
-button:hover{background:#176330}
-.fb-note{margin:8px 0 0;color:#5c6b82}
-.fb-status{display:inline-block;margin:0 0 8px;padding:4px 10px;border-radius:999px;background:#eef8f1;color:var(--fb-green);font-weight:700}
+:root{--fb-ink:#16324f;--fb-green:#12833a;--fb-saffron:#ef8b14;--fb-line:#e6edf5}
+body{font-family:"Segoe UI",system-ui,sans-serif;color:var(--fb-ink);margin:0;padding:14px 14px 128px;background:
+radial-gradient(280px 140px at -10% -20px,#ffb04a 0%,rgba(255,153,51,0) 72%),
+radial-gradient(320px 160px at 110% -30px,#ffd19a 0%,rgba(255,153,51,0) 70%),
+linear-gradient(#fff,#fff)}
+.container,.fb-header{max-width:430px;margin-left:auto;margin-right:auto}
+h1,h2{color:#17345c;letter-spacing:0}
+.fb-header{position:relative;margin-bottom:14px;padding:6px 2px 12px;background:transparent;border:0}
+.fb-brand{font-size:1.7rem;font-weight:800;letter-spacing:-.04em;line-height:1;text-decoration:none}
+.fb-brand span:first-child{color:var(--fb-green)}
+.fb-brand span:last-child{color:var(--fb-saffron)}
+.fb-account{position:absolute;right:0;top:8px;color:var(--fb-green);font-weight:800;text-decoration:none}
+.fb-ribbon{display:block;height:6px;margin-top:12px;border-radius:99px;border:1px solid #eadfce;background:linear-gradient(90deg,#ff9933 0 33%,#fff 33% 67%,#138808 67%)}
+.fb-flag-wave{position:fixed;left:0;right:0;bottom:0;z-index:4;width:100%;height:118px;pointer-events:none}/* tiranga */
+.fb-nav{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;gap:4px;margin:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:transparent;border-top:0;box-shadow:none}
+.fb-nav a{flex:1 1 0;min-width:0;box-sizing:border-box;text-align:center;padding:8px 2px;background:#fff;color:var(--fb-green);text-decoration:none;border-radius:14px;font-weight:800;font-size:11px;line-height:1.15}
+.fb-nav small{display:block;color:#6b7c90;font-size:10px;font-weight:700}
+body .card{background:#fff;border:1px solid #edf2f7;border-radius:22px;box-shadow:0 10px 28px rgba(22,50,79,.06);padding:18px 16px;margin-bottom:14px}
+.fb-hero{text-align:center;background:linear-gradient(180deg,#fff,#f5fbff)}
+.fb-hero h1{margin:8px 0 6px;font-size:1.45rem;line-height:1.25}
+.fb-kicker{margin:0;color:#5d7088;font-weight:700}
+.fb-logo{width:92px;height:92px;margin:4px auto 8px;border-radius:50%;background:#fff;box-shadow:0 8px 20px rgba(22,50,79,.08)}
+.fb-tiles{display:grid;gap:12px;margin:14px 0}
+.fb-tile{display:flex;gap:12px;align-items:center;padding:16px;border-radius:22px;text-decoration:none;color:var(--fb-ink);box-shadow:0 8px 20px rgba(22,50,79,.05)}
+.fb-tile strong{display:block;font-size:1.05rem}
+.fb-tile span{display:block;color:#5d7088;font-size:.9rem;font-weight:600}
+.fb-tile::after{content:"›";margin-left:auto;color:#8aa0b8;font-size:1.4rem;font-weight:700}
+.fb-mint{background:#e7f8ee}
+.fb-sky{background:#e7f1ff}
+.fb-ico{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:#fff;font-style:normal;font-weight:800;flex:0 0 46px}
+.fb-mint .fb-ico{background:#12833a}
+.fb-sky .fb-ico{background:#2563eb}
+.fb-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:0 0 14px}
+.fb-row a{display:flex;min-height:92px;padding:12px;border-radius:18px;text-decoration:none;font-weight:800;color:#17345c;align-items:flex-start;line-height:1.25;font-size:.92rem}
+.fb-row a:nth-child(1){background:#ffe8ec}
+.fb-row a:nth-child(2){background:#fff3df}
+.fb-row a:nth-child(3){background:#f3e8ff}
+.fb-rule{background:#e7f8ee;border-radius:22px;padding:14px 16px;margin-bottom:14px}
+body label{color:#24507a;font-weight:700}
+body input,body select,body textarea{width:100%;box-sizing:border-box;border:1px solid #d9e3ee;border-radius:14px;background:#f8fbfe;color:var(--fb-ink);padding:14px;font-size:16px}
+body button:not(.delete),body .fb-go{display:block;width:100%;box-sizing:border-box;background:var(--fb-green);color:#fff;border:0;border-radius:16px;min-height:52px;margin-top:14px;font-weight:800;font-size:1.05rem;text-align:center;text-decoration:none;scroll-margin-bottom:120px}
+body button:not(.delete):hover{background:#0f6d2e}
+body button.delete{background:#b3261e;color:#fff;border:0;border-radius:14px}
+.fb-note{margin:8px 0 0;color:#5d7088}
+.fb-status{display:inline-block;margin:0 0 8px;padding:4px 10px;border-radius:999px;background:#e8f8ee;color:var(--fb-green);font-weight:800}
+h2.fb-section{margin:18px 0 8px;padding:12px 14px;border-radius:16px;font-size:1rem}
+h2.fb-sec-personal{background:#e7f1ff;color:#1d4e89}
+h2.fb-sec-family{background:#ffe8ee;color:#9d174d}
+h2.fb-sec-address{background:#e7f8ee;color:#138a3a}
+h2.fb-sec-education{background:#fff4e0;color:#b45309}
+h2.fb-sec-category{background:#f3e8ff;color:#6d28d9}
+.fb-meter i{display:block;height:8px;margin-top:8px;border-radius:99px;background:#e5eef6;position:relative;overflow:hidden}
+.fb-meter i::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--fb-fill,0%);background:linear-gradient(90deg,#138a3a,#8ed35a)}
+.fb-split{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;color:#8aa;margin:8px 0}
+.fb-split::before,.fb-split::after{content:"";height:1px;background:#e1e8f0}
 a{color:var(--fb-green)}
+.fb-auth{text-align:left}
+.fb-auth h1,.fb-auth .fb-lead{text-align:center}
 @media(min-width:900px){
-body{padding:28px 24px 32px}
-.container,.fb-header{max-width:960px}
-.fb-nav{position:static;max-width:960px;margin:0 auto 16px;padding:8px;border:1px solid var(--fb-line);border-radius:16px;box-shadow:none}
-.fb-nav a{font-size:15px;padding:12px 8px}
+body{padding:28px 24px 128px}
+.fb-nav,.fb-flag-wave{left:50%;right:auto;width:min(430px,100%);transform:translateX(-50%)}
 }
 </style>
 """
@@ -1641,8 +1755,12 @@ def add_mobile_nav(response):
 
 @app.route("/")
 def home():
+    from app.ownership import current_user_id
 
-    return render_template_string(PAGE)
+    return render_template_string(
+        PAGE,
+        signed_in=current_user_id() is not None,
+    )
 
 
 VACANCIES_PAGE = """
@@ -1663,8 +1781,10 @@ a{color:#146c43}
 </head>
 <body>
 <div class="container">
-<h1>Vacancies</h1>
+<section class="card fb-hero">
+<h1>Find Vacancies</h1>
 <p class="fb-note">These are local profile slots, not signed-in accounts. Official links stay read-only.</p>
+</section>
 <button type="button" id="refresh">Refresh</button>
 <p id="vacancy-message">Loading vacancies...</p>
 <div id="vacancy-list"></div>
@@ -1764,15 +1884,20 @@ button{margin-top:12px;background:#146c43;color:#fff;border:0;font-weight:bold}
 </head>
 <body>
 <div class="container">
-<h1>Applications</h1>
+<section class="card fb-hero">
+<h1>My Applications</h1>
 <p class="fb-note">These are local profile slots, not signed-in accounts. Saving a status here does not submit a government form.</p>
-<label for="profile_id">Profile ID</label>
-<input id="profile_id" type="number" min="1" max="5" inputmode="numeric">
+</section>
+<input id="profile_id" type="hidden" data-slot="{{ profile_slot }}">
 <button type="button" id="load">Show applications</button>
-<p id="application-message">Enter a profile ID to view applications.</p>
+<p id="application-message">Aapki applications yahin dikhengi.</p>
 <div id="application-list"></div>
 </div>
 <script>
+const savedSlot = document.getElementById("profile_id").getAttribute("data-slot");
+if (savedSlot) {
+    document.getElementById("profile_id").value = savedSlot;
+}
 function addLine(parent, label, value) {
     if (value === null || value === undefined || String(value).trim() === "") {
         return;
@@ -1883,7 +2008,10 @@ def vacancies_page():
 
 @app.route("/applications")
 def applications_page():
-    return APPLICATIONS_PAGE
+    return render_template_string(
+        APPLICATIONS_PAGE,
+        profile_slot=_viewer_slot(),
+    )
 
 
 # --------------------------------------------------
@@ -2152,7 +2280,8 @@ def analyze():
 def test_form():
 
     return render_template_string(
-        TEST_FORM_HTML
+        TEST_FORM_HTML,
+        profile_slot=_viewer_slot(),
     )
 
 

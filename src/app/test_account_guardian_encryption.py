@@ -21,6 +21,8 @@ def _key():
 def _isolate(monkeypatch, tmp_path):
     database = tmp_path / "formbharat.db"
     monkeypatch.setattr(profile, "DB_PATH", database)
+    from app import verified_profile
+    monkeypatch.setattr(verified_profile, "DB_PATH", database)
     monkeypatch.setattr(document_vault, "DB_PATH", str(database))
     monkeypatch.setattr(document_vault, "STORAGE_DIR", str(tmp_path / "documents"))
     monkeypatch.setattr(application_tracker, "DB_PATH", database)
@@ -131,6 +133,43 @@ def test_legacy_data_cannot_be_claimed(monkeypatch, tmp_path):
     assert response.get_json()["error"] == "Legacy profile data cannot be claimed."
     from app.ownership import profile_owner
     assert profile_owner(1) is None
+
+
+def test_confirmed_adopt_attaches_only_that_legacy_profile(monkeypatch, tmp_path):
+    client = _account_client(monkeypatch, tmp_path)
+    profile.save_profile({"name": "Existing User"}, 1)
+    client.post("/api/account/register", json={
+        "email": "owner@example.com",
+        "password": PASSWORD,
+    })
+
+    blocked = client.post("/account/adopt", data={"profile_id": "1"})
+    assert blocked.status_code == 403
+    assert profile_owner(1) is None
+
+    adopted = client.post("/account/adopt", data={
+        "profile_id": "1",
+        "confirm_adopt": "yes",
+    })
+    assert adopted.status_code == 302
+    assert profile_owner(1) is not None
+    page = client.get("/profile")
+    assert page.status_code == 200
+    assert "Existing User" in page.get_data(as_text=True)
+
+    other = _account_client(monkeypatch, tmp_path)
+    other.post("/api/account/register", json={
+        "email": "other@example.com",
+        "password": PASSWORD,
+    })
+    stolen = other.post("/account/adopt", data={
+        "profile_id": "1",
+        "confirm_adopt": "yes",
+    })
+    assert stolen.status_code == 403
+    hidden = other.get("/profile")
+    assert hidden.status_code == 403
+    assert "Existing User" not in hidden.get_data(as_text=True)
 
 
 def test_missing_key_blocks_required_upload_and_legacy_file_stays(monkeypatch, tmp_path):
@@ -253,3 +292,20 @@ def test_repository_database_copy_migrates_without_changing_original(tmp_path, m
     assert all(row[4] == "" and row[5] is None for row in after)
     assert hashlib.sha256(source.read_bytes()).hexdigest() == original_hash
     assert documents.stat().st_mtime_ns == documents_mtime
+
+
+def test_signed_in_profile_page_opens_a_blank_slot(monkeypatch, tmp_path):
+    client = _account_client(monkeypatch, tmp_path)
+    profile.save_profile({"name": "Existing User"}, 1)
+    client.post("/api/account/register", json={
+        "email": "new@example.com",
+        "password": PASSWORD,
+    })
+
+    page = client.get("/profile")
+    text = page.get_data(as_text=True)
+
+    assert page.status_code == 403
+    assert "Existing User" not in text
+    assert profile_owner(1) is None
+    assert profile_owner(2) is None

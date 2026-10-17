@@ -5,7 +5,7 @@ import json
 import re
 import uuid
 from datetime import datetime
-from flask import request, jsonify, send_file
+from flask import jsonify, render_template_string, request, send_file
 from app.document_ocr import extract_text
 from app.profile import profile_exists
 
@@ -787,10 +787,10 @@ button{width:100%;margin-top:15px;padding:13px;background:#146c43;color:#fff;bor
 .doc{padding:12px;border-bottom:1px solid #ddd}.delete{background:#b3261e}
 </style></head>
 <body><div class="container">
-<div class="card"><h1>FormBharat 📁</h1><p>Document Vault</p>
+<div class="card"><h1>Documents Manage</h1><p>Photo, signature aur identity documents yahin save hote hain.</p>
 <p>पुरानी फाइलें मूल bytes में रहती हैं और दोबारा नहीं लिखी जातीं। नई upload तभी encrypt होती है जब document key लगी हो। Key आवश्यक हो और उपलब्ध न हो, तो upload रुक जाती है।</p>
 <form id="uploadForm">
-<label>Profile ID</label><input id="profile_id" type="number" min="1" max="5" value="1" required>
+<input id="profile_id" type="hidden" value="{{ profile_slot }}">
 <label>Document Type</label><input id="doc_type" placeholder="Aadhaar / Marksheet / Other" required>
 <label>Select File</label><input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png">
 <label>Camera</label><input id="camera" type="file" accept="image/*" capture="environment">
@@ -880,4 +880,15 @@ loadDocuments();
 def register_document_vault_ui(app):
     @app.route("/documents", methods=["GET"])
     def document_vault_page():
-        return DOCUMENT_VAULT_PAGE
+        from app.ownership import SlotAccessError, current_user_id, owned_slot_for_session
+
+        profile_slot = 1
+        if current_user_id() is not None:
+            try:
+                profile_slot = owned_slot_for_session()
+            except SlotAccessError:
+                profile_slot = ""
+        return render_template_string(
+            DOCUMENT_VAULT_PAGE,
+            profile_slot=profile_slot,
+        )

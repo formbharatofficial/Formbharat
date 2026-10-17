@@ -67,7 +67,7 @@ def test_home_dashboard_keeps_the_analyze_form(monkeypatch, tmp_path):
 
     assert "Dashboard" in page
     assert "OTP, CAPTCHA, and final Submit stay with you." in page
-    assert "Account login is not enabled." in page
+    assert "Sign in from Account." in page
     assert 'href="/test-form"' in page
     assert 'id="rootForm"' in page
     assert "analyzeForm" in page

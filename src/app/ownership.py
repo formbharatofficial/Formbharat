@@ -1,10 +1,10 @@
 """Profile-slot ownership.
 
-A new account never receives an existing slot automatically. An unowned
-slot remains available only while nobody is logged in. A logged-in account
-can claim a slot only when that slot has no profile, document, or
-application data, the claim is explicitly confirmed, and the server claim
-code matches. The code is not stored in the repository.
+A new account does not receive a filled slot. Opening My Profile gives
+that account the first blank slot. A slot that already has profile,
+document, or application data stays locked. The manual claim code is only
+for an explicitly confirmed empty-slot claim and is not stored in the
+repository.
 """
 
 import os
@@ -134,6 +134,37 @@ def slot_has_private_data(profile_id):
     )
 
 
+def owned_slot_for_session():
+    """One profile for now. Multi-profile slots stay closed."""
+    user_id = current_user_id()
+    if user_id is None:
+        raise SlotAccessError("Login is required.")
+    profile_id = 1
+    owner = profile_owner(profile_id)
+    if owner == user_id:
+        return profile_id
+    if owner is not None or slot_has_private_data(profile_id):
+        raise SlotAccessError("This profile belongs to another account.")
+    init_db()
+    connection = sqlite3.connect(_db_path())
+    try:
+        connection.execute(
+            """
+            INSERT INTO profile (id, owner_user_id)
+            VALUES (?, ?)
+            ON CONFLICT(id) DO UPDATE SET owner_user_id = excluded.owner_user_id
+            WHERE profile.owner_user_id IS NULL
+            """,
+            (profile_id, user_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    if profile_owner(profile_id) != user_id:
+        raise SlotAccessError("This profile belongs to another account.")
+    return profile_id
+
+
 def claim_status(profile_id):
     """Return a status word only. Slot contents are not included."""
     _validate_profile_id(profile_id)
@@ -177,3 +208,35 @@ def claim_empty_slot(profile_id, claim_code, confirm):
     finally:
         connection.close()
     return {"profile_id": profile_id, "claimed": True}
+
+
+def adopt_legacy_slot(profile_id, confirm=False):
+    """Attach an unowned slot that already has data, only after confirmation."""
+    _validate_profile_id(profile_id)
+    user_id = current_user_id()
+    if user_id is None:
+        raise SlotAccessError("Sign in before attaching an old profile.")
+    if confirm is not True:
+        raise SlotAccessError("Confirm that this old profile is yours.")
+    if profile_owner(profile_id) is not None:
+        raise SlotAccessError("That profile already belongs to an account.")
+    if not slot_has_private_data(profile_id):
+        raise SlotAccessError("That slot has no saved profile to attach.")
+    init_db()
+    connection = sqlite3.connect(_db_path())
+    try:
+        connection.execute(
+            """
+            INSERT INTO profile (id, owner_user_id)
+            VALUES (?, ?)
+            ON CONFLICT(id) DO UPDATE SET owner_user_id = excluded.owner_user_id
+            WHERE profile.owner_user_id IS NULL
+            """,
+            (profile_id, user_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    if profile_owner(profile_id) != user_id:
+        raise SlotAccessError("That profile could not be attached.")
+    return profile_id

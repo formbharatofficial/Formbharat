@@ -89,6 +89,40 @@ def test_analyze_ignores_request_profile_without_a_verified_profile(main):
     assert "RAW ONLY TEST" not in result["filled_html"]
 
 
+def test_saved_profile_page_fills_the_local_name_field(main):
+    from bs4 import BeautifulSoup
+
+    client = main.app.test_client()
+    page = client.get("/profile")
+    token = BeautifulSoup(page.get_data(as_text=True), "html.parser").find(
+        "input",
+        attrs={"name": "csrf_token"},
+    )["value"]
+    saved = client.post("/profile", data={
+        "name": "Shiva Singh",
+        "email": "shiva@example.com",
+        "csrf_token": token,
+    })
+    assert saved.status_code == 302
+
+    response = _post(main, {
+        "profile_id": 1,
+        "html": (
+            "<form><label for='full_name'>Full Name</label>"
+            "<input id='full_name' name='full_name'>"
+            "<label for='email'>Email</label>"
+            "<input id='email' name='email' type='email'></form>"
+        ),
+    })
+    result = response.get_json()["result"]
+    filled = {item["field"]: item["value"] for item in result["filled"]}
+
+    assert response.status_code == 200
+    assert filled["full_name"] == "Shiva Singh"
+    assert filled["email"] == "shiva@example.com"
+    assert "otp" not in filled
+
+
 def test_analyze_uses_the_verified_profile_for_profile_id(main):
     from app import verified_profile
 
