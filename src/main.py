@@ -1765,6 +1765,13 @@ def _uses_mobile_nav(path):
     return path.startswith("/job/") or path.startswith("/apply/") or path.startswith("/other-fill/")
 
 _MOBILE_NAV = """
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="theme-color" content="#12833a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FormBharat">
 <header class="fb-header">
 <a class="fb-brand" href="/"><span>Form</span><span>Bharat</span></a>
 <a class="fb-account" href="/account">खाता</a>
@@ -2318,50 +2325,50 @@ a{color:#146c43;font-weight:bold}
 <article class="card">
 <h2>PAN card</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/pan">incometax.gov.in</a></li>
+<li><a href="/other-fill/pan">काम चुनो</a></li>
 </ul>
 </article>
 <article class="card">
 <h2>Ration card</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/ration">nfsa.gov.in</a></li>
+<li><a href="/other-fill/ration">काम चुनो</a></li>
 </ul>
 
 </article>
 <article class="card">
 <h2>Voter card</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/voter">voters.eci.gov.in</a></li>
+<li><a href="/other-fill/voter">काम चुनो</a></li>
 </ul>
 </article>
 <article class="card">
-<h2>Driving licence</h2>
+<h2>ड्राइविंग लाइसेंस</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/licence">sarathi.parivahan.gov.in</a></li>
+<li><a href="/other-fill/licence">काम चुनो</a></li>
 </ul>
 </article>
 <article class="card">
 <h2>Passport</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/passport">passportindia.gov.in</a></li>
+<li><a href="/other-fill/passport">काम चुनो</a></li>
 </ul>
 </article>
 <article class="card">
 <h2>Shram card</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/shram">eshram.gov.in</a></li>
+<li><a href="/other-fill/shram">काम चुनो</a></li>
 </ul>
 </article>
 <article class="card">
 <h2>Ayushman card</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/ayushman">nha.gov.in</a></li>
+<li><a href="/other-fill/ayushman">काम चुनो</a></li>
 </ul>
 </article>
 <article class="card">
 <h2>Kisan Samman Nidhi</h2>
 <ul class="fb-links">
-<li><a href="/other-fill/kisan">pmkisan.gov.in</a></li>
+<li><a href="/other-fill/kisan">काम चुनो</a></li>
 </ul>
 </article>
 </div>

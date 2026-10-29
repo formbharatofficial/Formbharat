@@ -4,7 +4,7 @@ import os
 import tempfile
 from urllib.parse import urlparse
 
-from flask import Response, current_app, jsonify, redirect, render_template_string, request, url_for
+from flask import Response, current_app, jsonify, redirect, render_template_string, request, session, url_for
 
 from app.board_registration import (
     BoardRegistrationError,
@@ -56,24 +56,29 @@ JOB_PAGE = """
 <div class="container">
 <section class="card fb-hero">
 <h1>{{ vacancy.title }}</h1>
+{% if closed_on %}
+<p>ऑनलाइन फॉर्म बंद हो चुका है। आखिरी तारीख {{ closed_on }} थी।</p>
+<p>जो फाइल खुलती है वह नोटिस है, फॉर्म नहीं। ऑटो-फिल उसे नहीं भरता।</p>
+{% else %}
 <p>क्या आप इस फॉर्म को ऑटो-फिल से भरना चाहते हैं?</p>
+{% endif %}
 </section>
+{% if not closed_on %}
 <section class="card">
-<p>हाँ पर सरकारी साइट नई टैब में खुलेगी। ऐप आपकी सेव प्रोफाइल और दस्तावेज़ से भरेगा। ओटीपी, कैप्चा, पासवर्ड और Submit आप खुद करेंगे।</p>
+<p>सरकारी साइट अभी नहीं खुलेगी। पहले जाँच होगी, फिर ₹{{ fee }}, फिर फॉर्म। OTP, कैप्चा और Submit आप करेंगे।</p>
 <a class="fb-go" id="fb-yes" href="{{ yes_url }}">हाँ, ऑटो-फिल से भरो</a>
 </section>
-{% if vacancy.official_link %}
+{% if self_url %}
 <section class="card">
 <p>नहीं पर सिर्फ सरकारी साइट खुलेगी। ऐप उस पर कुछ नहीं लिखेगा।</p>
-<a class="fb-go fb-ghost" href="{{ vacancy.official_link }}" target="_blank" rel="noopener noreferrer">नहीं, मैं खुद भरूँगा</a>
+<a class="fb-go fb-ghost" href="{{ self_url }}" target="_blank" rel="noopener noreferrer">नहीं, मैं खुद भरूँगा</a>
 </section>
 {% endif %}
-{% if open_site %}
-<script>
-document.getElementById("fb-yes").addEventListener("click", function () {
-  window.open({{ open_site | tojson }}, "_blank", "noopener");
-});
-</script>
+{% endif %}
+{% if notice_url %}
+<section class="card">
+<a class="fb-go fb-ghost" href="{{ notice_url }}" target="_blank" rel="noopener noreferrer">नोटिस पढ़ो</a>
+</section>
 {% endif %}
 </div>
 </body>
@@ -502,6 +507,31 @@ def _http_url(value):
     return ""
 
 
+def _closed_on(vacancy):
+    """Return a past last date as dd/mm/yyyy. An open or undated form stays blank."""
+    from datetime import date
+
+    end = str((vacancy or {}).get("application_end") or "").strip()[:10]
+    parts = end.split("-")
+    if len(parts) != 3 or any(not part.isdigit() for part in parts):
+        return ""
+    year, month, day = (int(part) for part in parts)
+    try:
+        ended = date(year, month, day)
+    except ValueError:
+        return ""
+    if ended >= date.today():
+        return ""
+    return f"{day:02d}/{month:02d}/{year}"
+
+
+def _notice_url(vacancy):
+    link = _http_url((vacancy or {}).get("official_link"))
+    if link and ".pdf" in urlparse(link).path.lower():
+        return link
+    return ""
+
+
 def _form_page_url(vacancy):
     """Use the form page. A notice PDF is not a form, so the board portal is used."""
     link = _http_url((vacancy or {}).get("official_link"))
@@ -635,6 +665,196 @@ def _documents(profile_id):
     return types
 
 
+_AADHAAR_DOC = (("aadhaar", "aadhar"), "आधार")
+_PHOTO_DOC = (("photo", "photograph"), "फोटो")
+_SIGN_DOC = (("sign",), "हस्ताक्षर")
+
+
+def _service(key, title, fields, docs=(), number=""):
+    return {
+        "key": key,
+        "title": title,
+        "fields": fields,
+        "docs": docs,
+        "number": number,
+    }
+
+
+_PAN_FIELDS = (
+    ("name", "नाम"),
+    ("father_name", "पिता का नाम"),
+    ("dob", "जन्म तिथि"),
+    ("gender", "लिंग"),
+    ("mobile", "मोबाइल"),
+    ("email", "ईमेल"),
+    ("address", "पता"),
+)
+_PERSON = (
+    ("name", "नाम"),
+    ("dob", "जन्म तिथि"),
+    ("gender", "लिंग"),
+    ("mobile", "मोबाइल"),
+)
+_HOME = (("address", "पता"), ("state", "राज्य"), ("district", "ज़िला"))
+_LICENCE_FIELDS = (
+    ("name", "नाम"),
+    ("dob", "जन्म तिथि"),
+    ("mobile", "मोबाइल"),
+    ("address", "पता"),
+    ("state", "राज्य"),
+    ("father_name", "पिता का नाम"),
+)
+_PASSPORT_FIELDS = (
+    ("name", "नाम"),
+    ("dob", "जन्म तिथि"),
+    ("gender", "लिंग"),
+    ("mobile", "मोबाइल"),
+    ("email", "ईमेल"),
+    ("address", "पता"),
+    ("father_name", "पिता का नाम"),
+    ("mother_name", "माता का नाम"),
+)
+
+
+def _form_flows():
+    person_home = _PERSON + _HOME
+    return {
+        "pan": {
+            "title": "PAN कार्ड",
+            "url": "https://www.incometax.gov.in/iec/foportal",
+            "pay_note": "नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("new", "नया PAN", _PAN_FIELDS, (_AADHAAR_DOC, _PHOTO_DOC, _SIGN_DOC)),
+                _service("correction", "PAN में सुधार", _PAN_FIELDS, (_AADHAAR_DOC,), "पुराना PAN नंबर"),
+                _service("reprint", "PAN दोबारा", (("name", "नाम"), ("dob", "जन्म तिथि"), ("mobile", "मोबाइल")), (), "PAN नंबर"),
+            ),
+        },
+        "ration": {
+            "title": "राशन कार्ड",
+            "url": "https://nfsa.gov.in/portal/state_portals",
+            "pay_note": "नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("new", "नया राशन कार्ड", person_home, (_AADHAAR_DOC,)),
+                _service("member", "सदस्य जोड़ना", (("name", "नाम"), ("dob", "जन्म तिथि")), (_AADHAAR_DOC,), "राशन कार्ड नंबर"),
+                _service("correction", "राशन कार्ड में सुधार", (("name", "नाम"), ("address", "पता"), ("state", "राज्य")), (_AADHAAR_DOC,), "राशन कार्ड नंबर"),
+            ),
+        },
+        "voter": {
+            "title": "वोटर कार्ड",
+            "url": "https://voters.eci.gov.in/",
+            "pay_note": "नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("new", "नया वोटर कार्ड", person_home, (_PHOTO_DOC, _AADHAAR_DOC)),
+                _service("correction", "वोटर कार्ड में सुधार", (("name", "नाम"), ("dob", "जन्म तिथि"), ("address", "पता")), (), "वोटर नंबर"),
+                _service("shift", "वोटर का पता बदलना", _HOME, (), "वोटर नंबर"),
+            ),
+        },
+        "licence": {
+            "title": "ड्राइविंग लाइसेंस",
+            "url": "https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do",
+            "pay_note": "राज्य एक बार आप चुनोगे। नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("learner", "लर्नर लाइसेंस", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC)),
+                _service("driving", "ड्राइविंग लाइसेंस", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC)),
+                _service("renewal", "लाइसेंस रिन्यू", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC), "पुराना लाइसेंस नंबर"),
+                _service("duplicate", "डुप्लीकेट लाइसेंस", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC), "पुराना लाइसेंस नंबर"),
+                _service("address", "पते में बदलाव", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC), "पुराना लाइसेंस नंबर"),
+                _service("idp", "इंटरनेशनल ड्राइविंग परमिट", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC), "पुराना लाइसेंस नंबर"),
+                _service("replace", "लाइसेंस बदलना", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC), "पुराना लाइसेंस नंबर"),
+                _service("add-class", "गाड़ी की श्रेणी जोड़ना", _LICENCE_FIELDS, (_PHOTO_DOC, _SIGN_DOC), "पुराना लाइसेंस नंबर"),
+            ),
+        },
+        "passport": {
+            "title": "पासपोर्ट",
+            "url": "https://www.passportindia.gov.in/psp/Apply",
+            "pay_note": "नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("new", "नया पासपोर्ट", _PASSPORT_FIELDS, (_PHOTO_DOC,)),
+                _service("reissue", "पासपोर्ट दोबारा", _PASSPORT_FIELDS, (_PHOTO_DOC,), "पुराना पासपोर्ट नंबर"),
+            ),
+        },
+        "shram": {
+            "title": "श्रम कार्ड",
+            "url": "https://www.eshram.gov.in/",
+            "pay_note": "नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("new", "नया श्रम कार्ड", person_home, (_AADHAAR_DOC,)),
+                _service("update", "श्रम कार्ड में सुधार", (("name", "नाम"), ("mobile", "मोबाइल"), ("address", "पता")), (_AADHAAR_DOC,), "श्रम कार्ड नंबर"),
+            ),
+        },
+        "ayushman": {
+            "title": "आयुष्मान कार्ड",
+            "url": "https://nha.gov.in/Ayushman-Card",
+            "pay_note": "नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("new", "नया आयुष्मान कार्ड", _PERSON + (("address", "पता"), ("state", "राज्य")), (_AADHAAR_DOC,)),
+                _service("correction", "आयुष्मान कार्ड में सुधार", (("name", "नाम"), ("dob", "जन्म तिथि"), ("address", "पता")), (_AADHAAR_DOC,)),
+            ),
+        },
+        "kisan": {
+            "title": "किसान सम्मान निधि",
+            "url": "https://www.pmkisan.gov.in/",
+            "pay_note": "नाम वाले खाने भरे जाएँगे। OTP, कैप्चा और Submit आप करेंगे।",
+            "services": (
+                _service("new", "नया किसान पंजीकरण", person_home, (_AADHAAR_DOC,)),
+                _service("update", "किसान जानकारी में सुधार", (("name", "नाम"), ("mobile", "मोबाइल"), ("address", "पता"), ("state", "राज्य")), (_AADHAAR_DOC,)),
+            ),
+        },
+    }
+
+
+def _flow(form_key):
+    return _form_flows().get(form_key)
+
+
+def _flow_choice(form_key, service_key):
+    flow = _flow(form_key)
+    if flow is None:
+        return None
+    for service in flow["services"]:
+        if service["key"] == service_key:
+            return service
+    return None
+
+
+def _saved_number(form_key, service_key):
+    saved = session.get("form_numbers")
+    if not isinstance(saved, dict):
+        return ""
+    bucket = saved.get(form_key)
+    if not isinstance(bucket, dict):
+        return ""
+    return str(bucket.get(service_key) or "").strip()
+
+
+def _save_number(form_key, service_key, value):
+    saved = session.get("form_numbers")
+    saved = dict(saved) if isinstance(saved, dict) else {}
+    bucket = saved.get(form_key)
+    bucket = dict(bucket) if isinstance(bucket, dict) else {}
+    bucket[service_key] = str(value or "").strip()
+    saved[form_key] = bucket
+    session["form_numbers"] = saved
+
+
+def _has_doc(docs, tokens):
+    return any(any(token in item for token in tokens) for item in docs)
+
+
+def _service_checks(profile, docs, form_key, choice):
+    items = []
+    for key, label in choice["fields"]:
+        items.append({"label": label, "ok": bool(str(profile.get(key) or "").strip())})
+    for tokens, label in choice["docs"]:
+        items.append({"label": label, "ok": _has_doc(docs, tokens)})
+    if choice["number"]:
+        items.append({
+            "label": choice["number"],
+            "ok": len(_saved_number(form_key, choice["key"])) >= 4,
+        })
+    return items
+
+
 def _checks(profile, docs):
     items = []
     for key, label in _CHECK_FIELDS:
@@ -649,28 +869,14 @@ def _checks(profile, docs):
 
 
 def register_apply_routes(app):
-    other_forms = {
-        "pan": ("PAN card", "https://www.incometax.gov.in/iec/foportal"),
-        "ration": ("Ration card", "https://nfsa.gov.in/portal/state_portals"),
-        "voter": ("Voter card", "https://voters.eci.gov.in/"),
-        "licence": ("Driving licence", "https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do"),
-        "passport": ("Passport", "https://www.passportindia.gov.in/psp/Apply"),
-        "shram": ("Shram card", "https://www.eshram.gov.in/"),
-        "ayushman": ("Ayushman card", "https://nha.gov.in/Ayushman-Card"),
-        "kisan": ("Kisan Samman Nidhi", "https://www.pmkisan.gov.in/"),
-    }
-
     def _other_form(form_key):
-        item = other_forms.get(form_key)
+        item = _flow(form_key)
         if item is None:
             return None
-        return {"key": form_key, "title": item[0], "url": item[1]}
+        return {"key": form_key, "title": item["title"], "url": item["url"]}
 
-    @app.route("/other-fill/<form_key>")
-    def other_fill_ask(form_key):
-        form = _other_form(form_key)
-        if form is None:
-            return redirect(url_for("other_forms_page"))
+    def _service_menu(form):
+        flow = _flow(form["key"])
         return render_template_string(
             """
 <!DOCTYPE html>
@@ -678,58 +884,76 @@ def register_apply_routes(app):
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>FormBharat</title></head>
 <body>
 <div class="container">
-<h1>{{ form.title }}</h1>
-<p>क्या आप इस फॉर्म को ऑटो-फिल से भरना चाहते हैं?</p>
-<section class="card">
-<p>हाँ पर सरकारी साइट नई टैब में खुलेगी। ऐप आपकी सेव प्रोफाइल और दस्तावेज़ से भरेगा। ओटीपी, कैप्चा, पासवर्ड और Submit आप खुद करेंगे।</p>
-<a class="fb-go" id="fb-yes" href="{{ yes_url }}">हाँ, ऑटो-फिल से भरो</a>
-</section>
-<section class="card">
-<p>नहीं पर सिर्फ सरकारी साइट खुलेगी। ऐप उस पर कुछ नहीं लिखेगा।</p>
-<a class="fb-go fb-ghost" href="{{ form.url }}" target="_blank" rel="noopener noreferrer">नहीं, मैं खुद भरूँगा</a>
-</section>
-{% if open_site %}
-<script>
-document.getElementById("fb-yes").addEventListener("click", function () {
-  window.open({{ open_site | tojson }}, "_blank", "noopener");
-});
-</script>
-{% endif %}
+<h1>{{ title }}</h1>
+<p>कौन सा काम करना है?</p>
+<p>एक काम चुनो। सरकारी साइट अभी नहीं खुलेगी। जो इस काम में चाहिए वही जाँच होगी। बाकी सेव प्रोफाइल वहीं रहेगी। पूरा हुआ तो ₹20 के बाद फॉर्म भरा जाएगा।</p>
+{% for item in services %}
+<a class="fb-go" href="{{ item.href }}">{{ item.title }}</a>
+{% endfor %}
 </div>
 </body>
 </html>
             """,
-            form=form,
-            yes_url=url_for("other_fill_check", form_key=form_key),
-            open_site=_http_url(form["url"]),
+            title=flow["title"],
+            services=[
+                {
+                    "title": service["title"],
+                    "href": url_for(
+                        "other_fill_check", form_key=form["key"], service=service["key"]
+                    ),
+                }
+                for service in flow["services"]
+            ],
         )
 
-    @app.route("/other-fill/<form_key>/check")
-    def other_fill_check(form_key):
-        form = _other_form(form_key)
-        if form is None:
-            return redirect(url_for("other_forms_page"))
+    def _service_flow(form, choice):
         gate = _require_login()
         if gate is not None:
             return gate
         slot = _slot()
         if slot is None:
             return redirect(url_for("profile_page"))
-        return render_template_string(
-            CHECK_PAGE,
-            checks=_checks(get_profile(slot), _documents(slot)),
-            pay_url=url_for("other_fill_pay", form_key=form_key),
-            fee=FEE_RUPEES,
+        if request.method == "POST" and choice["number"]:
+            _save_number(form["key"], choice["key"], request.form.get("record_number"))
+        checks = _service_checks(
+            get_profile(slot), _documents(slot), form["key"], choice
         )
-
-    @app.route("/other-fill/<form_key>/pay")
-    def other_fill_pay(form_key):
-        form = _other_form(form_key)
-        if form is None:
-            return redirect(url_for("other_forms_page"))
-        gate = _require_login()
-        if gate is not None:
-            return gate
+        ready = all(item["ok"] for item in checks)
+        if request.path.endswith("/pay"):
+            if not ready:
+                return redirect(url_for(
+                    "other_fill_check", form_key=form["key"], service=choice["key"]
+                ))
+            return render_template_string(
+                """
+<!DOCTYPE html>
+<html lang="hi">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>FormBharat</title></head>
+<body>
+<div class="container">
+<h1>{{ title }}</h1>
+<p>जो इस काम में चाहिए वह सेव है। ₹{{ fee }} FormBharat का शुल्क है। UPI ऐप को पता नहीं चलता कि पैसे आ गए, इसलिए paid नहीं लिखा जाएगा।</p>
+{% if upi %}<p><a class="fb-go" href="{{ upi }}">UPI से ₹{{ fee }} भेजें</a></p>{% endif %}
+<form method="POST" action="{{ fill_url }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="service" value="{{ service }}">
+<button class="fb-go" type="submit">फॉर्म भरो</button>
+</form>
+<p>Edge में यह पन्ना खुलेगा: {{ form_url }}</p>
+<p>{{ pay_note }}</p>
+</div>
+</body>
+</html>
+                """,
+                title=choice["title"],
+                fee=FEE_RUPEES,
+                upi=upi_request(choice["title"]),
+                fill_url=url_for("other_fill_site", form_key=form["key"]),
+                service=choice["key"],
+                form_url=form["url"],
+                pay_note=_flow(form["key"])["pay_note"],
+                csrf_token=issue_csrf_token(),
+            )
         return render_template_string(
             """
 <!DOCTYPE html>
@@ -737,27 +961,71 @@ document.getElementById("fb-yes").addEventListener("click", function () {
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>FormBharat</title></head>
 <body>
 <div class="container">
-<h1>₹{{ fee }}</h1>
-<p>{{ form.title }} की जाँच हो चुकी है। यह FormBharat का शुल्क है। UPI ऐप में ₹{{ fee }} खुलेगा। ऐप यह नहीं देख सकता कि पैसे आ गए, इसलिए paid खुद नहीं लिखा जाएगा।</p>
-{% if upi %}
-<p><a class="fb-go" href="{{ upi }}">UPI से ₹{{ fee }} भेजें</a></p>
+<h1>{{ title }}</h1>
+{% if ready %}
+<p>जो इस काम में चाहिए वह सेव है। आगे ₹{{ fee }} है, फिर फॉर्म भरा जाएगा।</p>
+{% else %}
+<p>अभी ₹{{ fee }} नहीं कटेगा। नीचे जो सेव नहीं है, वही इस काम के लिए चाहिए। बाकी प्रोफाइल सेव रहती है, यहाँ नहीं दिखती।</p>
 {% endif %}
-<form method="POST" action="{{ fill_url }}">
+<section class="card">
+{% for item in checks %}
+<div class="fb-line"><span>{{ item.label }}</span>{% if item.ok %}<b class="ok">सेव है</b>{% else %}<b>सेव नहीं</b>{% endif %}</div>
+{% endfor %}
+</section>
+{% if choice.number and not number_ok %}
+<form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<button class="fb-go" type="submit">सरकारी साइट पर भरो</button>
+<label>{{ choice.number }}</label>
+<input name="record_number" autocomplete="off">
+<button class="fb-go" type="submit">नंबर सेव करो</button>
 </form>
-<p>Edge खुलेगा। सेव प्रोफाइल और दस्तावेज़ वहाँ लिखे जाएँगे। लाइव फोटो, ओटीपी, कैप्चा, पासवर्ड और Submit आप करेंगे। Submit नहीं होगा।</p>
-<p><a href="{{ form.url }}" target="_blank" rel="noopener noreferrer">{{ form.url }}</a></p>
+{% endif %}
+{% if ready %}
+<a class="fb-go" href="{{ pay_url }}">आगे बढ़ें · ₹{{ fee }}</a>
+{% else %}
+<a class="fb-go" href="/profile">प्रोफाइल खोलो</a>
+<a class="fb-go fb-ghost" href="/documents">दस्तावेज़ खोलो</a>
+{% endif %}
 </div>
 </body>
 </html>
             """,
-            form=form,
+            title=choice["title"],
+            ready=ready,
+            checks=checks,
+            choice=choice,
+            number_ok=len(_saved_number(form["key"], choice["key"])) >= 4,
             fee=FEE_RUPEES,
-            upi=upi_request(form["title"]),
-            fill_url=url_for("other_fill_site", form_key=form_key),
+            pay_url=url_for("other_fill_pay", form_key=form["key"], service=choice["key"]),
             csrf_token=issue_csrf_token(),
         )
+
+    @app.route("/other-fill/<form_key>")
+    def other_fill_ask(form_key):
+        form = _other_form(form_key)
+        if form is None:
+            return redirect(url_for("other_forms_page"))
+        return _service_menu(form)
+
+    @app.route("/other-fill/<form_key>/check", methods=["GET", "POST"])
+    def other_fill_check(form_key):
+        form = _other_form(form_key)
+        if form is None:
+            return redirect(url_for("other_forms_page"))
+        choice = _flow_choice(form_key, str(request.values.get("service") or ""))
+        if choice is None:
+            return redirect(url_for("other_fill_ask", form_key=form_key))
+        return _service_flow(form, choice)
+
+    @app.route("/other-fill/<form_key>/pay")
+    def other_fill_pay(form_key):
+        form = _other_form(form_key)
+        if form is None:
+            return redirect(url_for("other_forms_page"))
+        choice = _flow_choice(form_key, str(request.args.get("service") or ""))
+        if choice is None:
+            return redirect(url_for("other_fill_ask", form_key=form_key))
+        return _service_flow(form, choice)
 
     @app.route("/rrb-flow")
     def rrb_flow_sheet():
@@ -772,11 +1040,15 @@ document.getElementById("fb-yes").addEventListener("click", function () {
             return render_template_string(
                 "<p>Vacancy not found.</p><p><a href='/vacancies'>Jobs</a></p>"
             ), 404
+        notice_url = _notice_url(vacancy)
+        form_url = _http_url(vacancy.get("official_link"))
         return render_template_string(
             JOB_PAGE,
             vacancy=vacancy,
             yes_url=_next_after_job(vacancy_id, vacancy),
-            open_site=_http_url(vacancy.get("official_link")),
+            closed_on=_closed_on(vacancy),
+            notice_url=notice_url,
+            self_url="" if notice_url else form_url,
             fee=FEE_RUPEES,
         )
 

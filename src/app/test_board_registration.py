@@ -321,7 +321,8 @@ def test_otr_sits_inside_the_job_that_needs_it(monkeypatch, tmp_path):
     assert "One Time Registration" not in ssc
     assert "Candidate Account" not in ssc
     assert "innerHTML" not in ssc
-    assert "window.open" in ssc
+    assert "window.open" not in ssc
+    assert "सरकारी साइट अभी नहीं खुलेगी" in ssc
     assert f"/apply/{ssc_id}/account" in ssc
     assert f"/apply/{ssc_id}/check" not in ssc
 
@@ -501,10 +502,11 @@ def test_official_page_is_filled_and_not_submitted(monkeypatch, tmp_path):
     assert seen["payload"]["url"] == "https://ssc.gov.in/candidate-portal/one-time-registration"
     assert has_paid_fee(pdf_id, 1) is False
 
-    pan_pay = client.get("/other-fill/pan/pay").get_data(as_text=True)
-    assert "https://www.incometax.gov.in/iec/foportal" in pan_pay
-    assert "OTR" not in pan_pay
-    pan = client.post("/other-fill/pan/fill", data={"csrf_token": _csrf(pan_pay)})
+    pan_menu = client.get("/other-fill/pan").get_data(as_text=True)
+    assert "नया PAN" in pan_menu
+    assert "https://www.incometax.gov.in/iec/foportal" not in pan_menu
+    assert "OTR" not in pan_menu
+    pan = client.post("/other-fill/pan/fill", data={"csrf_token": _csrf(pay)})
     assert pan.status_code == 200
     assert "Submit नहीं हुआ" in pan.get_data(as_text=True)
     assert seen["payload"]["url"] == "https://www.incometax.gov.in/iec/foportal"
@@ -515,4 +517,27 @@ def test_official_page_is_filled_and_not_submitted(monkeypatch, tmp_path):
     })
     assert again.status_code == 200
     assert seen["payload"]["action"] == "reread"
-    assert "Submit नहीं हुआ" in again.get_data(as_text=True)
+
+
+def test_closed_notice_pdf_is_not_opened_as_the_form(monkeypatch, tmp_path):
+    client, _database = _client(monkeypatch, tmp_path)
+    created = client.post("/api/vacancies", json={
+        "title": "SSC CHSL Recruitment 2026",
+        "organization": "SSC",
+        "official_link": (
+            "https://ssc.gov.in/api/attachment/uploads/masterData/"
+            "NoticeBoards/Notice_of_adv_chsl_2026.pdf"
+        ),
+        "registration_board": "ssc",
+        "application_start": "2026-09-07",
+        "application_end": "2026-10-07",
+    })
+    assert created.status_code == 201
+    job_id = created.get_json()["vacancy"]["id"]
+    page = client.get(f"/job/{job_id}").get_data(as_text=True)
+    assert "बंद हो चुका है" in page
+    assert "07/10/2026" in page
+    assert "नोटिस है, फॉर्म नहीं" in page
+    assert "हाँ, ऑटो-फिल से भरो" not in page
+    assert "window.open" not in page
+    assert "Notice_of_adv_chsl_2026.pdf" in page

@@ -50,6 +50,75 @@ def test_form_posts_require_a_csrf_token_and_json_rejects_another_origin():
     assert deleted.get_json()["deleted"] is True
 
 
+def test_localhost_tunnel_https_counts_as_the_same_page():
+    from app.request_guard import install_request_guard
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    install_request_guard(app)
+
+    @app.post("/save")
+    def save():
+        return jsonify({"success": True})
+
+    client = app.test_client()
+    phone = client.post(
+        "/save",
+        base_url="http://phone.example",
+        json={"name": "A"},
+        headers={
+            "Origin": "https://phone.example",
+            "X-Forwarded-Proto": "https",
+        },
+    )
+    outsider = client.post(
+        "/save",
+        base_url="http://phone.example",
+        json={"name": "A"},
+        headers={
+            "Origin": "https://phone.example",
+            "X-Forwarded-Proto": "https",
+        },
+        environ_base={"REMOTE_ADDR": "10.9.9.9"},
+    )
+    evil = client.post(
+        "/save",
+        base_url="http://phone.example",
+        json={"name": "A"},
+        headers={
+            "Origin": "https://evil.test",
+            "X-Forwarded-Proto": "https",
+        },
+    )
+
+    visitor = client.post(
+        "/save",
+        base_url="http://phone.example",
+        json={"name": "A"},
+        headers={
+            "Origin": "https://phone.example",
+            "CF-Visitor": '{"scheme":"https"}',
+        },
+    )
+    visitor_out = client.post(
+        "/save",
+        base_url="http://phone.example",
+        json={"name": "A"},
+        headers={
+            "Origin": "https://phone.example",
+            "CF-Visitor": '{"scheme":"https"}',
+        },
+        environ_base={"REMOTE_ADDR": "10.9.9.9"},
+    )
+
+    assert phone.status_code == 200
+    assert visitor.status_code == 200
+    assert visitor_out.status_code == 403
+    assert outsider.status_code == 403
+    assert outsider.get_json()["error"] == "cross-origin request was rejected"
+    assert evil.status_code == 403
+
+
 def test_sensitive_requests_are_rate_limited():
     from app.request_guard import install_request_guard
 

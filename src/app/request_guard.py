@@ -5,6 +5,7 @@ requests must echo the session token. This is not an account system,
 and it does not encrypt stored documents.
 """
 
+import json
 import os
 import secrets
 import time
@@ -23,11 +24,42 @@ def issue_csrf_token():
     return token
 
 
+def _tunnel_scheme():
+    """Read https only from the local tunnel, not from a network caller."""
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        return ""
+    forwarded = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+    if forwarded in {"http", "https"}:
+        return forwarded
+    visitor = request.headers.get("CF-Visitor", "").strip()
+    if not visitor:
+        return ""
+    try:
+        scheme = str(json.loads(visitor).get("scheme", "")).lower()
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return ""
+    if scheme in {"http", "https"}:
+        return scheme
+    return ""
+
+
+def _tunnel_host_url():
+    """The phone page is https. The tunnel delivers it as http on this machine."""
+    scheme = _tunnel_scheme()
+    if not scheme:
+        return ""
+    return f"{scheme}://{request.host}/"
+
+
 def _same_origin():
-    origin = request.headers.get("Origin", "").strip()
+    origin = request.headers.get("Origin", "").strip().rstrip("/")
     if not origin:
         return True
-    return origin.rstrip("/") == request.host_url.rstrip("/")
+    allowed = {request.host_url.rstrip("/")}
+    tunnel = _tunnel_host_url().rstrip("/")
+    if tunnel:
+        allowed.add(tunnel)
+    return origin in allowed
 
 
 def _content_type():
