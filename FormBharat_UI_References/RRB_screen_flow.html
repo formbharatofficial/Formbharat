@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<title>FormBharat RRB screen flow</title>
+<style>
+:root{--green:#12833a;--ink:#16324f;--saffron:#ef8b14;--line:#e6edf5;--paper:#f4f7f2}
+*{box-sizing:border-box}
+body{margin:0;background:#e7f6ea;color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif}
+.sheet{width:1680px;padding:28px 28px 36px}
+h1{margin:0;font-size:28px}
+.lead{margin:6px 0 18px;font-size:16px}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:18px 14px}
+.shot{min-width:0}
+.phone{background:#111;border-radius:28px;padding:10px;height:520px;box-shadow:0 10px 24px rgba(22,50,79,.15)}
+.screen{background:
+radial-gradient(120px 70px at 0 0,#ffb04a,transparent 70%),
+linear-gradient(#fff,#fff);
+border-radius:22px;height:500px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.top{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 0;font-size:11px;font-weight:800}
+.brand{font-size:13px}.brand span:first-child{color:var(--saffron)}.brand span:last-child{color:var(--green)}
+.ribbon{height:4px;margin:6px 10px 0;border-radius:4px;background:linear-gradient(90deg,#ff9933 0 33%,#fff 33% 66%,#138808 66%)}
+.body{padding:8px 10px 8px;overflow:hidden;flex:1}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px;margin-bottom:6px}
+h2{margin:0 0 4px;font-size:13px;line-height:1.25}
+p{margin:0 0 3px;font-size:10px;line-height:1.3}
+.muted{color:#5d7088}
+.ok{color:var(--green);font-weight:800}
+.warn{background:#fff4e0;border-radius:10px;padding:6px;font-size:10px;line-height:1.3}
+.chip{display:inline-block;border:1px solid var(--green);color:var(--green);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;margin:0 3px 3px 0}
+.chip.on{background:var(--green);color:#fff}
+.go{display:block;background:var(--green);color:#fff;text-align:center;border-radius:12px;padding:7px 6px;font-size:10px;font-weight:800;margin-top:6px}
+.row{display:flex;justify-content:space-between;gap:6px;font-size:10px;padding:3px 0;border-bottom:1px solid #f0f3f7}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.tile{background:#f7fbf8;border-radius:10px;padding:6px;font-size:9px;font-weight:800}
+.tile small{display:block;font-weight:600;color:#5d7088}
+.nav{display:flex;gap:4px;padding:6px;background:#fff}
+.nav b{flex:1;text-align:center;background:#fff;border-radius:10px;font-size:8px;padding:4px 0;color:var(--green)}
+.cap{display:flex;gap:8px;align-items:flex-start;margin:8px 4px 0}
+.num{width:28px;height:28px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}
+.cap strong{display:block;font-size:13px}
+.cap span{font-size:11px;color:#3d5168}
+.train{height:46px;border-radius:10px;background:linear-gradient(90deg,#16324f,#12833a);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="sheet">
+<h1>RRB भर्ती का स्क्रीन क्रम</h1>
+<p class="lead">Latest Jobs में RRB चुनने के बाद यही क्रम है। यह SSC OTR नहीं है। rrbapply.gov.in पर उम्मीदवार खाता चाहिए। OTP, CAPTCHA और final Submit आप करते हो।</p>
+<div class="grid">
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span>FormBharat</span></div>
+<div class="ribbon"></div>
+<div class="top"><div class="brand"><span>Form</span><span>Bharat</span></div><span>खाता</span></div>
+<div class="body">
+<div class="card"><h2>नमस्ते</h2><p>आज आप क्या करना चाहते हैं?</p></div>
+<div class="tiles">
+<div class="tile">मेरा प्रोफ़ाइल<small>My Profile</small></div>
+<div class="tile">मेरे दस्तावेज़<small>My Documents</small></div>
+<div class="tile">सरकारी नौकरी<small>Latest Jobs</small></div>
+<div class="tile">रिजल्ट<small>Result</small></div>
+<div class="tile">आंसर की<small>Answer Key</small></div>
+<div class="tile">एडमिट कार्ड<small>Admit Card</small></div>
+<div class="tile">प्रवेश<small>Admission</small></div>
+<div class="tile">अन्य फॉर्म<small>Other Form</small></div>
+</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">1</span><span><strong>होम पेज</strong>Home Page</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card"><h2>नई सरकारी नौकरी</h2><p class="muted">Latest Jobs</p></div>
+<div><span class="chip on">All</span><span class="chip">Railway</span><span class="chip">SSC</span><span class="chip">UP</span><span class="chip">State</span></div>
+<div class="card"><h2>RRB NTPC 2026</h2><p>Railway Recruitment Board</p><p class="ok">यहीं से खुलता है</p></div>
+<div class="card"><h2>RRB Group D 2026</h2><p>Railway Recruitment Board</p></div>
+<p class="muted">सूची में अलग OTR बटन नहीं है।</p>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">2</span><span><strong>भर्ती चुनें</strong>Select RRB Job</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="train">RRB</div>
+<div class="card"><p class="muted">Railway Recruitment Board</p><h2>RRB NTPC 2026</h2><p>योग्यता: जो नोटिस में सेव हो</p><p>आधिकारिक साइट: rrbapply.gov.in</p></div>
+<div class="warn">इस भर्ती के लिए उम्मीदवार खाता आवश्यक है। यह SSC OTR नहीं है।</div>
+<div class="go">आगे बढ़ें · उम्मीदवार खाते की जाँच</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">3</span><span><strong>भर्ती की जानकारी</strong>Check Details</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card"><h2>उम्मीदवार खाते की स्थिति</h2><p>इस प्रोफाइल पर RRB खाता सेव नहीं है।</p></div>
+<div class="go">हाँ, मेरा उम्मीदवार खाता है</div>
+<div class="go">नहीं है — प्रोफाइल से तैयारी करो</div>
+<p class="muted">नंबर बाद में आप लिखोगे। पासवर्ड यहाँ सेव नहीं होता।</p>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">4</span><span><strong>खाते की जाँच</strong>Candidate Account</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card"><h2>प्रोफाइल जानकारी</h2>
+<div class="row"><span>नाम</span><b class="ok">सेव है</b></div>
+<div class="row"><span>पिता का नाम</span><b class="ok">सेव है</b></div>
+<div class="row"><span>जन्म तिथि</span><b class="ok">सेव है</b></div>
+<div class="row"><span>मोबाइल</span><b>missing</b></div>
+<div class="row"><span>10वीं रोल</span><b>missing</b></div>
+</div>
+<p class="muted">खाली फ़ील्ड को भरा हुआ नहीं मानते।</p>
+<div class="go">आगे बढ़ें · प्रोफाइल जाँच</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">5</span><span><strong>प्रोफाइल से तैयारी</strong>Use Profile</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card"><h2>प्रोफाइल और दस्तावेज जाँच</h2>
+<div class="row"><span>Personal Details</span><b class="ok">उपलब्ध</b></div>
+<div class="row"><span>Photograph</span><b>missing</b></div>
+<div class="row"><span>Signature</span><b>missing</b></div>
+<div class="row"><span>Aadhaar / Other ID</span><b>missing</b></div>
+</div>
+<div class="go">आगे बढ़ें · ₹20 भुगतान</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">6</span><span><strong>प्रोफाइल जाँच</strong>Profile Check</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card"><h2>भुगतान करें</h2><p>Form Filling Service Fee</p><p class="ok" style="font-size:22px">₹20</p><p class="muted">per application</p></div>
+<div class="warn">यह FormBharat की फीस है। रेलवे की परीक्षा फीस आधिकारिक साइट पर अलग है। बिना पक्के भुगतान के paid नहीं लिखा जाता।</div>
+<div class="go">₹20 का भुगतान करें</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">7</span><span><strong>भुगतान</strong>Make Payment</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card"><h2>फॉर्म भरना शुरू</h2><p>प्रोफाइल की सेव फ़ील्ड अगली स्क्रीन पर दिखेंगी।</p></div>
+<div class="warn">rrbapply.gov.in पर ऐप खुद फॉर्म जमा नहीं करता। OTP, CAPTCHA और Submit आप करोगे।</div>
+<div class="go">आगे बढ़ें · व्यक्तिगत विवरण</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">8</span><span><strong>भरना शुरू</strong>Start Fill</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span>rrbapply.gov.in</span></div>
+<div class="body">
+<div class="card"><h2>व्यक्तिगत विवरण</h2>
+<div class="row"><span>नाम</span><span>आपकी प्रोफाइल</span></div>
+<div class="row"><span>पिता</span><span>आपकी प्रोफाइल</span></div>
+<div class="row"><span>माता</span><span>आपकी प्रोफाइल</span></div>
+<div class="row"><span>जन्म तिथि</span><span>आपकी प्रोफाइल</span></div>
+</div>
+<div class="card"><h2>शिक्षा</h2><p>10वीं, 12वीं, स्नातक — जो सेव है वही।</p></div>
+<p class="muted">आधिकारिक पेज के खाली फ़ील्ड आप पूरा करते हो।</p>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">9</span><span><strong>फॉर्म की फ़ील्ड</strong>Personal and Education</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span>rrbapply.gov.in</span></div>
+<div class="body">
+<div class="card"><h2>फोटो और हस्ताक्षर</h2>
+<div class="row"><span>Photograph</span><b>आप चुनोगे</b></div>
+<div class="row"><span>हस्ताक्षर</span><b>आप चुनोगे</b></div>
+</div>
+<div class="warn">फाइल चुनना आधिकारिक पेज पर आपके पास रहता है।</div>
+<div class="card"><h2>OTP और CAPTCHA</h2><p>दोनों आप डालोगे। ऐप OTP नहीं भेजता और CAPTCHA हल नहीं करता।</p></div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">10</span><span><strong>फोटो, OTP, CAPTCHA</strong>You enter these</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card"><h2>अंतिम समीक्षा</h2>
+<div class="row"><span>Personal</span><b class="ok">saved</b></div>
+<div class="row"><span>Education</span><b>missing</b></div>
+<div class="row"><span>Photo</span><b>missing</b></div>
+<div class="row"><span>सरकारी Submit</span><b>अभी नहीं हुआ</b></div>
+</div>
+<div class="go">आगे बढ़ें · आवेदन सेव</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">11</span><span><strong>अंतिम समीक्षा</strong>Review Before Submit</span></p>
+</article>
+
+<article class="shot">
+<div class="phone"><div class="screen">
+<div class="top"><b>9:41</b><span></span></div>
+<div class="ribbon"></div>
+<div class="body">
+<div class="card" style="text-align:center"><p class="ok" style="font-size:28px">✓</p><h2>मेरे आवेदन में ड्राफ्ट</h2><p>FormBharat की सूची में सेव होता है।</p></div>
+<div class="warn">रेलवे की साइट पर आवेदन तभी पूरा होता है जब आप वहाँ Submit करते हो।</div>
+<div class="go">मेरे आवेदन में सेव करें</div>
+<div class="go">आधिकारिक साइट खोलें</div>
+</div>
+<div class="nav"><b>Home</b><b>नौकरी</b><b>आवेदन</b><b>और</b></div>
+</div></div>
+<p class="cap"><span class="num">12</span><span><strong>आवेदन सेव</strong>Save in My Applications</span></p>
+</article>
+
+</div>
+</div>
+</body>
+</html>

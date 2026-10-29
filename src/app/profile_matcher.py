@@ -10,61 +10,9 @@ def match_profile_to_fields(fields, profile):
     """
 
     aliases = {
-        "name": [
-            "name",
-            "fullname",
-            "full_name",
-            "candidate_name",
-            "candidate_full_name",
-            "applicant_name",
-            "applicant_full_name"
-        ],
-
-        "father_name": [
-            "father_name",
-            "fathername",
-        ],
-
-        "mother_name": [
-            "mother_name",
-            "mothername",
-        ],
-
         "guardian_name": [
             "guardian_name",
             "guardianname",
-        ],
-
-        "email": [
-            "email",
-            "email_id", "mail_id",
-            "emailid",
-            "mail"
-        ],
-
-        "mobile": [
-            "mobile",
-            "mobile_number",
-            "phone",
-            "phone_number",
-            "contact",
-            "contact_number"
-        ],
-
-        "dob": [
-            "dob",
-            "date_of_birth",
-            "birth_date",
-            "datebirth",
-            "birthdate"
-        ],
-
-        "address": [
-            "address",
-            "residential_address",
-            "postal_address",
-            "permanent_address",
-            "present_address"
         ],
 
         "country": [
@@ -75,22 +23,9 @@ def match_profile_to_fields(fields, profile):
             "nationality"
         ],
 
-        "gender": [
-            "gender",
-            "sex"
-        ],
-
         "category": [
             "category",
             "caste"
-        ],
-
-        "state": [
-            "state"
-        ],
-
-        "district": [
-            "district"
         ],
 
         "pincode": [
@@ -98,13 +33,132 @@ def match_profile_to_fields(fields, profile):
             "pin_code",
             "zip",
             "zipcode",
-            "zip_code"
-        ]
+            "zip_code",
+            "पिनकोड",
+            "पिन_कोड",
+        ],
+        "name": [
+            "name",
+            "fullname",
+            "full_name",
+            "candidate_name",
+            "candidate_full_name",
+            "applicant_name",
+            "applicant_full_name",
+            "नाम",
+            "पूरा_नाम",
+            "आवेदक_का_नाम",
+        ],
+        "father_name": [
+            "father_name",
+            "fathername",
+            "पिता",
+            "पिता_का_नाम",
+        ],
+        "mother_name": [
+            "mother_name",
+            "mothername",
+            "माता",
+            "माता_का_नाम",
+        ],
+        "dob": [
+            "dob",
+            "date_of_birth",
+            "birth_date",
+            "datebirth",
+            "birthdate",
+            "जन्म_तिथि",
+            "जन्म_की_तारीख",
+        ],
+        "mobile": [
+            "mobile",
+            "mobile_number",
+            "phone",
+            "phone_number",
+            "contact",
+            "contact_number",
+            "मोबाइल",
+            "मोबाइल_नंबर",
+        ],
+        "address": [
+            "address",
+            "residential_address",
+            "postal_address",
+            "permanent_address",
+            "present_address",
+            "पता",
+        ],
+        "email": [
+            "email",
+            "email_id",
+            "mail_id",
+            "emailid",
+            "mail",
+            "ईमेल",
+        ],
+        "gender": [
+            "gender",
+            "sex",
+            "लिंग",
+        ],
+        "state": [
+            "state",
+            "राज्य",
+        ],
+        "district": [
+            "district",
+            "जिला",
+        ],
+        "tenth_roll_number": ["tenth_roll_number", "10th_roll_number", "10th_roll_no", "matric_roll_number"],
+        "tenth_passing_year": ["tenth_passing_year", "10th_passing_year", "matric_year"],
+        "tenth_marks": ["tenth_marks", "10th_marks"],
+        "tenth_percentage": ["tenth_percentage", "10th_percentage"],
+        "twelfth_roll_number": ["twelfth_roll_number", "12th_roll_number", "12th_roll_no"],
+        "twelfth_passing_year": ["twelfth_passing_year", "12th_passing_year"],
+        "twelfth_marks": ["twelfth_marks", "12th_marks"],
+        "twelfth_percentage": ["twelfth_percentage", "12th_percentage"],
+        "graduation_degree": ["graduation_degree", "graduation"],
+        "graduation_roll_number": ["graduation_roll_number"],
+        "graduation_passing_year": ["graduation_passing_year", "graduation_year"],
+        "graduation_marks": ["graduation_marks"],
+        "graduation_percentage": ["graduation_percentage"],
+        "post_graduation_degree": ["post_graduation_degree"],
+        "post_graduation_roll_number": ["post_graduation_roll_number"],
+        "post_graduation_passing_year": ["post_graduation_passing_year"],
+        "post_graduation_marks": ["post_graduation_marks"],
+        "post_graduation_percentage": ["post_graduation_percentage"],
+        "diploma_name": ["diploma_name"],
+        "diploma_roll_number": ["diploma_roll_number"],
+        "diploma_passing_year": ["diploma_passing_year"],
+        "diploma_marks": ["diploma_marks"],
+        "diploma_percentage": ["diploma_percentage"],
+        "other_qualification": ["other_qualification"],
+        "pan_number": [
+            "pan",
+            "pan_number",
+            "pan_no",
+            "pannumber",
+            "permanent_account_number",
+            "पैन",
+            "पैन_नंबर",
+            "पैन_नम्बर",
+        ],
+        "aadhaar_number": [
+            "aadhaar",
+            "aadhaar_number",
+            "aadhaar_no",
+            "aadhar",
+            "aadhar_number",
+            "aadhar_no",
+            "आधार",
+            "आधार_नंबर",
+            "आधार_नम्बर",
+        ],
 
         # age is intentionally absent so it cannot receive dob.
-        # education and qualification are intentionally absent: the profile
-        # stores separate tenth, twelfth, graduation, diploma, and
-        # other_qualification values, and none of those is a generic degree.
+        # A generic education or qualification label is intentionally absent.
+        # Tenth, twelfth, graduation, diploma, and other_qualification match
+        # only their own saved value.
     }
 
     # Fields which must NEVER be automatically matched.
@@ -113,7 +167,9 @@ def match_profile_to_fields(fields, profile):
         "one_time_password",
         "captcha",
         "verification_code",
-        "security_code"
+        "security_code",
+        "password",
+        "passwd",
     ]
 
     # Name-like fields which belong to another person.
@@ -175,7 +231,10 @@ def match_profile_to_fields(fields, profile):
         # SAFETY BLOCK: OTP / CAPTCHA
         # --------------------------------------------------
 
-        if any(term in combined for term in blocked_terms):
+        field_type = str(item.get("type") or "").lower()
+        if field_type in {"password", "submit", "button", "reset", "image"} or any(
+            term in combined for term in blocked_terms
+        ):
 
             item["profile_key"] = None
             item["profile_value"] = None

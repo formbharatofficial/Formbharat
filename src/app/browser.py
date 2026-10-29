@@ -27,10 +27,11 @@ class Browser:
 
 
 class BrowserSession:
-    """Keep one local Edge page open and reread its current DOM.
+    """Keep one Edge page open and reread its current DOM.
 
-    open() accepts only a file URL. read_current() does not navigate,
-    click, type, or submit. close() ends the browser process.
+    open() accepts a local file or an http(s) form page. A website opens
+    in a visible window. read_current() does not navigate, click, type,
+    or submit. close() ends the browser process.
     """
 
     def __init__(self):
@@ -41,22 +42,20 @@ class BrowserSession:
         self.url = None
 
     def open(self, url):
-        if not isinstance(url, str) or not url.strip():
-            raise ValueError("url must be a non-empty string")
-        if not url.strip().lower().startswith("file:"):
-            raise ValueError("only a local file page can stay open")
+        from app.rendered_assist import assist_page_url
 
+        self.url = assist_page_url(url)
         from playwright.sync_api import sync_playwright
 
         if self._page is None:
             self._playwright = sync_playwright().start()
             self._browser = self._playwright.chromium.launch(
-                headless=True,
+                headless=self.url.lower().startswith("file:"),
                 executable_path=Browser._EDGE_EXECUTABLE,
             )
             self._page = self._browser.new_page()
-        self.url = url.strip()
-        self._page.goto(self.url, wait_until="load")
+        wait = "load" if self.url.lower().startswith("file:") else "domcontentloaded"
+        self._page.goto(self.url, wait_until=wait, timeout=45000)
         return self._page.content()
 
     def read_current(self):

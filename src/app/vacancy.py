@@ -5,6 +5,22 @@ from app.runtime_config import database_path
 
 DB_PATH = database_path()
 
+REGISTRATION_BOARDS = ("", "none", "ssc", "rrb")
+
+_VACANCY_COLUMNS = (
+    "id", "title", "organization", "category", "description",
+    "eligibility", "application_start", "application_end",
+    "exam_date", "official_link", "created_at", "updated_at",
+    "source_name", "registration_board",
+)
+
+
+def _registration_board(value):
+    board = str(value or "").strip().lower()
+    if board not in REGISTRATION_BOARDS:
+        raise ValueError("registration_board must be none, ssc, rrb, or empty")
+    return board
+
 
 def _connect():
     return sqlite3.connect(DB_PATH)
@@ -35,6 +51,13 @@ def init_vacancy_db():
         conn.execute(
             "ALTER TABLE vacancies ADD COLUMN source_name TEXT NOT NULL DEFAULT ''"
         )
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(vacancies)")
+    }
+    if "registration_board" not in columns:
+        conn.execute(
+            "ALTER TABLE vacancies ADD COLUMN registration_board TEXT NOT NULL DEFAULT ''"
+        )
     conn.execute("""
         CREATE TABLE IF NOT EXISTS vacancy_alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,12 +83,14 @@ def create_vacancy(
     exam_date="",
     official_link="",
     source_name="",
+    registration_board="",
 ):
     if not title or not organization or not official_link:
         raise ValueError("title, organization and official_link are required")
 
     _require_official_link(official_link)
     _status_for(application_start, application_end)
+    registration_board = _registration_board(registration_board)
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -73,14 +98,14 @@ def create_vacancy(
     cur = conn.execute("""
         INSERT INTO vacancies (
             title, organization, category, description, eligibility,
-            application_start, application_end, exam_date, official_link,
-            created_at, updated_at, source_name
+            application_start, application_end,             exam_date, official_link,
+            created_at, updated_at, source_name, registration_board
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         title, organization, category, description, eligibility,
         application_start, application_end, exam_date, official_link,
-        now, now, source_name or ""
+        now, now, source_name or "", registration_board
     ))
     vacancy_id = cur.lastrowid
     conn.commit()
@@ -137,13 +162,7 @@ def get_vacancy(vacancy_id):
     if row is None:
         return None
 
-    columns = [
-        "id", "title", "organization", "category", "description",
-        "eligibility", "application_start", "application_end",
-        "exam_date", "official_link", "created_at", "updated_at",
-        "source_name",
-    ]
-    return _with_status(dict(zip(columns, row)))
+    return _with_status(dict(zip(_VACANCY_COLUMNS, row)))
 
 
 def list_vacancies(category=None, status=None):
@@ -153,13 +172,7 @@ def list_vacancies(category=None, status=None):
     ).fetchall()
     conn.close()
 
-    columns = [
-        "id", "title", "organization", "category", "description",
-        "eligibility", "application_start", "application_end",
-        "exam_date", "official_link", "created_at", "updated_at",
-        "source_name",
-    ]
-    items = [_with_status(dict(zip(columns, row))) for row in rows]
+    items = [_with_status(dict(zip(_VACANCY_COLUMNS, row))) for row in rows]
     if category:
         wanted = category.strip().lower()
         items = [
@@ -183,13 +196,15 @@ def update_vacancy(vacancy_id, **fields):
     allowed = {
         "title", "organization", "category", "description", "eligibility",
         "application_start", "application_end", "exam_date", "official_link",
-        "source_name",
+        "source_name", "registration_board",
     }
     changes = {
         key: str(value).strip()
         for key, value in fields.items()
         if key in allowed and value is not None
     }
+    if "registration_board" in changes:
+        changes["registration_board"] = _registration_board(changes["registration_board"])
     if not changes:
         return current
 
@@ -263,6 +278,7 @@ def import_vacancy_record(record):
         exam_date=str(record.get("exam_date", "")).strip(),
         official_link=str(record.get("official_link", "")).strip(),
         source_name=str(record.get("source_name", "")).strip(),
+        registration_board=str(record.get("registration_board", "")).strip(),
     )
 
 

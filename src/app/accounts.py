@@ -32,7 +32,7 @@ ACCOUNT_PAGE = """
 <title>FormBharat</title>
 <style>
 body.fb-gate{margin:0;padding:0;background:#eef4f8;font-family:"Segoe UI",system-ui,sans-serif;color:#17345c}
-body.fb-gate .fb-header,body.fb-gate .fb-nav,body.fb-gate .fb-flag-wave{display:none}
+body.fb-gate .fb-header,body.fb-gate .fb-nav,body.fb-gate .fb-flag-wave,body.fb-gate .fb-more{display:none}
 .fb-stage{position:relative;max-width:430px;min-height:100vh;margin:0 auto;background:#fff;display:flex;flex-direction:column;box-shadow:0 0 40px rgba(22,50,79,.08)}
 .fb-wave-top{position:absolute;left:0;top:0;width:100%;height:150px;pointer-events:none}
 .fb-wave-bottom{position:relative;display:block;width:100%;height:120px;margin-top:auto;pointer-events:none}
@@ -378,6 +378,19 @@ def user_email(user_id):
     finally:
         connection.close()
     return None if row is None else row[0]
+
+
+def user_full_name(user_id):
+    init_accounts()
+    connection = sqlite3.connect(_db_path())
+    try:
+        row = connection.execute(
+            "SELECT full_name FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+    return "" if row is None else str(row[0] or "").strip()
 
 
 def start_session(user_id):

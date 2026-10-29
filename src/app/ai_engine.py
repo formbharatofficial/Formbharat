@@ -63,7 +63,3 @@ class FormBharatAI:
             matched.append(item)
 
         return matched
-
-
-ai = FormBharatAI()
-ai.about()

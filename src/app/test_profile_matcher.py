@@ -201,6 +201,43 @@ def test_generic_education_is_not_mapped_to_one_qualification():
     assert result[1]["profile_value"] is None
 
 
+def test_saved_fields_fill_on_any_form_when_the_label_is_that_field():
+    profile = {
+        "tenth_roll_number": "1001",
+        "twelfth_passing_year": "2012",
+        "graduation_degree": "B.A.",
+        "pan_number": "ABCDE1234F",
+        "aadhaar_number": "123412341234",
+        "name": "Asha",
+    }
+    fields = [
+        {"id": "tenth_roll_number", "label": "10th Roll Number", "name": "tenth_roll_number"},
+        {"id": "12th_passing_year", "label": "12th Passing Year", "name": "12th_passing_year"},
+        {"id": "graduation_degree", "label": "Graduation Degree", "name": "graduation_degree"},
+        {"id": "pan", "label": "PAN", "name": "pan"},
+        {"id": "aadhaar_number", "label": "आधार नंबर", "name": "aadhaar_number"},
+        {"id": "pwd", "label": "Password", "name": "password", "type": "password"},
+        {"id": "go", "label": "Submit", "name": "go", "type": "submit"},
+    ]
+
+    result = match_profile_to_fields(fields, profile)
+
+    assert result[0]["matched"] is True
+    assert result[0]["profile_value"] == "1001"
+    assert result[1]["matched"] is True
+    assert result[1]["profile_value"] == "2012"
+    assert result[2]["matched"] is True
+    assert result[2]["profile_value"] == "B.A."
+    assert result[3]["matched"] is True
+    assert result[3]["profile_key"] == "pan_number"
+    assert result[4]["matched"] is True
+    assert result[4]["profile_key"] == "aadhaar_number"
+    assert result[5]["matched"] is False
+    assert result[5]["match_confidence"] == "blocked"
+    assert result[6]["matched"] is False
+    assert result[6]["match_confidence"] == "blocked"
+
+
 def test_otp_and_captcha_are_always_blocked():
     profile = {
         "otp": "123456",

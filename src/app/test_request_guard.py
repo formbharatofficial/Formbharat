@@ -94,14 +94,14 @@ def _load_main(monkeypatch, tmp_path):
     return loaded
 
 
-def test_local_assist_route_rejects_remote_urls_and_profile_payloads(
+def test_local_assist_route_rejects_bad_urls_and_profile_payloads(
     monkeypatch, tmp_path
 ):
     client = _load_main(monkeypatch, tmp_path).app.test_client()
 
     remote = client.post(
         "/api/local-assist",
-        json={"url": "https://example.test/form", "profile_id": 1},
+        json={"url": "javascript:alert(1)", "profile_id": 1},
     )
     supplied = client.post(
         "/api/local-assist",
@@ -114,9 +114,9 @@ def test_local_assist_route_rejects_remote_urls_and_profile_payloads(
 
     assert remote.status_code == 400
     assert remote.get_json()["submitted"] is False
-    assert "local file" in remote.get_json()["error"]
+    assert "form page" in remote.get_json()["error"]
     assert supplied.status_code == 400
-    assert "profile_id and local file URL" in supplied.get_json()["error"]
+    assert "profile_id and form page URL" in supplied.get_json()["error"]
     assert client.application.extensions.get("local_browser_sessions", {}) == {}
 
 

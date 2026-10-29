@@ -9,10 +9,31 @@ from pathlib import Path
 
 import pytest
 
-from app.runtime_config import database_path, load_settings, storage_dir
+from app.runtime_config import database_path, gemini_api_key, load_env_file, load_settings, storage_dir
 
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def test_env_file_supplies_gemini_key_without_replacing_existing(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "FORMBHARAT_GEMINI_API_KEY=from-file\n"
+        "FORMBHARAT_GEMINI_PLANNER=gemini-3.8-flash\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FORMBHARAT_GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("FORMBHARAT_GEMINI_PLANNER", "already-set")
+
+    load_env_file(env_file)
+
+    assert os.environ["FORMBHARAT_GEMINI_API_KEY"] == "from-file"
+    assert os.environ["FORMBHARAT_GEMINI_PLANNER"] == "already-set"
+    monkeypatch.delenv("FORMBHARAT_GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setattr("app.runtime_config.load_env_file", lambda path=None: None)
+    assert gemini_api_key() == ""
 
 
 def test_development_settings_keep_local_defaults(monkeypatch):

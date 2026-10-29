@@ -1,7 +1,8 @@
-"""Assist one local rendered page. This does not open a website or submit."""
+"""Assist one rendered form page. This does not submit."""
 
 import re
 from datetime import datetime
+from urllib.parse import urlparse
 
 from app.ai_matcher import AIMatcher
 from app.field_analyzer import FieldAnalyzer
@@ -18,12 +19,22 @@ _DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y")
 _CALLER_PROFILE_KEYS = {"profile", "verified_profile", "html"}
 
 
-def _local_page(url):
+def assist_page_url(url):
+    """Accept a local file or an http(s) form page. Nothing else."""
     if not isinstance(url, str) or not url.strip():
         raise ValueError("url must be a non-empty string")
-    if not url.strip().lower().startswith("file:"):
-        raise ValueError("only a local file page can be assisted")
-    return url.strip()
+    text = url.strip()
+    lowered = text.lower()
+    if lowered.startswith("file:"):
+        return text
+    parsed = urlparse(text)
+    if parsed.scheme in {"http", "https"} and parsed.hostname:
+        return text
+    raise ValueError("only a form page can be assisted")
+
+
+def _local_page(url):
+    return assist_page_url(url)
 
 
 def _valid_date(value):
@@ -130,6 +141,8 @@ def _assist_html(local_url, html, verified_profile, documents=None, attachment_d
             field["ai_block_reason"] = ai_result["reason"]
 
     matched = match_profile_to_fields(analyzed, verified_profile)
+    from app.gemini_assist import assist_fields
+    assist_fields(matched, verified_profile)
     attachments = []
     if documents is not None and attachment_dir is not None:
         from app.form_attachments import plan_attachments
@@ -178,8 +191,11 @@ def assist_verified_profile(browser, url, profile_id, reread=False):
 
     from app.form_attachments import public_attachments, saved_documents
 
+    from app.fill_profile import with_saved_identity
+
     local_url = _local_page(url)
     stored = get_verified_profile(selected)
+    fill_from = with_saved_identity(stored, selected) if stored is not None else None
     if reread and callable(getattr(browser, "read_current", None)):
         html = browser.read_current()
     else:
@@ -190,7 +206,7 @@ def assist_verified_profile(browser, url, profile_id, reread=False):
         result = _assist_html(
             local_url,
             html,
-            stored,
+            fill_from,
             documents=documents,
             attachment_dir=directory,
         )
@@ -222,7 +238,7 @@ def run_local_assist(payload, sessions, browser_factory):
     if not isinstance(payload, dict):
         raise ValueError("request must be a JSON object")
     if any(key in payload for key in _CALLER_PROFILE_KEYS):
-        raise ValueError("only a profile_id and local file URL are accepted")
+        raise ValueError("only a profile_id and form page URL are accepted")
     if not isinstance(sessions, dict):
         raise ValueError("sessions must be a dictionary")
 

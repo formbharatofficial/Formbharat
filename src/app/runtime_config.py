@@ -35,6 +35,32 @@ def apply_document_vault_paths(vault):
         vault.STORAGE_DIR = str(storage_dir())
 
 
+def load_env_file(path=None):
+    """Load KEY=value lines from the repo .env. Existing variables stay as they are."""
+    file = Path(path) if path else REPO_ROOT / ".env"
+    if not file.is_file():
+        return
+    for raw in file.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        name = name.strip()
+        value = value.strip().strip('"').strip("'")
+        if name and name not in os.environ:
+            os.environ[name] = value
+
+
+def gemini_api_key():
+    """Return the Gemini key from the environment or .env. Never invent one."""
+    load_env_file()
+    for name in ("FORMBHARAT_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
 def load_settings():
     """Read deployment settings. Production never enables the debugger."""
     environment = os.environ.get("FORMBHARAT_ENV", "development").strip().lower()

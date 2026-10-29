@@ -1,5 +1,9 @@
 from flask import Flask, request, render_template_string, jsonify
 
+from app.runtime_config import load_env_file
+
+load_env_file()
+
 # Optional FormBharat modules
 try:
     from app.profile_ui import register_profile_ui
@@ -25,16 +29,6 @@ try:
     from app.fill_engine import fill_form
 except Exception:
     fill_form = None
-
-try:
-    from app.form_reader import FormReader
-except Exception:
-    FormReader = None
-
-try:
-    from app.field_analyzer import FieldAnalyzer
-except Exception:
-    FieldAnalyzer = None
 
 try:
     from app.ai_matcher import AIMatcher
@@ -102,6 +96,7 @@ def create_vacancy_api():
             exam_date=str(data.get("exam_date", "")).strip(),
             official_link=str(data.get("official_link", "")).strip(),
             source_name=str(data.get("source_name", "")).strip(),
+            registration_board=str(data.get("registration_board", "")).strip(),
         )
 
         return jsonify({
@@ -125,6 +120,9 @@ def create_vacancy_api():
 @app.route("/api/vacancies", methods=["GET"])
 def list_vacancies_api():
     try:
+        from app.official_notices import publish_official_notices
+
+        publish_official_notices()
         return jsonify({
             "success": True,
             "vacancies": list_vacancies(
@@ -314,6 +312,7 @@ def _attach_vacancy_reference(application):
     linked = dict(application)
     linked["official_link"] = vacancy.get("official_link") or ""
     linked["deadline"] = vacancy.get("application_end") or ""
+    linked["registration_board"] = vacancy.get("registration_board") or ""
     return linked
 
 
@@ -1380,19 +1379,39 @@ PAGE = """
             <circle cx="60" cy="36" r="3" fill="#0a3d91"/>
         </svg>
         <p class="fb-kicker">Dashboard · Ek Profile · Sabhi Forms · Kam Samay</p>
-        <h1>Government Forms,<br>Ab aur bhi Aasaan</h1>
+        <h1>{% if greet_name %}नमस्ते, {{ greet_name }}{% else %}नमस्ते{% endif %}</h1>
+        <p class="fb-note">आज आप क्या करना चाहते हैं?</p>
         <p class="fb-note">OTP, CAPTCHA, and final Submit stay with you.</p>
         <p class="fb-note">Sign in from Account. Khali slot My Profile par milta hai. Purani profile Account se khud jod sakte hain.</p>
     </section>
-    <div class="fb-tiles">
+    <div class="fb-home-grid">
+        <a class="fb-home-tile mint" href="/profile"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#22c55e"/><circle cx="24" cy="16" r="8" fill="#fff"/><path d="M8 42c1.4-10 7.2-15 16-15s14.6 5 16 15" fill="#fff"/></svg><span class="fb-home-copy"><strong>मेरा प्रोफ़ाइल</strong><span>My Profile</span></span></a>
+        <a class="fb-home-tile rose" href="/documents"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#ef4444"/><path d="M13 8h13l10 10v22a3 3 0 0 1-3 3H13a3 3 0 0 1-3-3V11a3 3 0 0 1 3-3z" fill="#fff"/><path d="M26 8v10h10" fill="#fecaca"/><path d="M16 26h16M16 32h11" stroke="#ef4444" stroke-width="2.8" stroke-linecap="round"/></svg><span class="fb-home-copy"><strong>मेरे दस्तावेज़</strong><span>My Documents</span></span></a>
+        <a class="fb-home-tile sky" href="/vacancies"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#3b82f6"/><path d="M8 40V20l16-10 16 10v20H8z" fill="#fff"/><rect x="20" y="28" width="8" height="12" rx="1" fill="#93c5fd"/><rect x="14" y="22" width="6" height="5" rx="1" fill="#3b82f6"/><rect x="28" y="22" width="6" height="5" rx="1" fill="#3b82f6"/></svg><span class="fb-home-copy"><strong>सरकारी नौकरी</strong><span>Latest Jobs</span></span></a>
+        <a class="fb-home-tile amber" href="/vacancies?kind=Result"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#16a34a"/><rect x="9" y="26" width="8" height="13" rx="2" fill="#fff"/><rect x="20" y="14" width="8" height="25" rx="2" fill="#fff"/><rect x="31" y="20" width="8" height="19" rx="2" fill="#bbf7d0"/></svg><span class="fb-home-copy"><strong>रिजल्ट</strong><span>Result</span></span></a>
+        <a class="fb-home-tile mint" href="/vacancies?kind=Answer%20key"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#f59e0b"/><circle cx="20" cy="20" r="10" fill="#fff"/><circle cx="20" cy="20" r="5" fill="#f59e0b"/><path d="M27 27l12 12" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg><span class="fb-home-copy"><strong>आंसर की</strong><span>Answer Key</span></span></a>
+        <a class="fb-home-tile rose" href="/vacancies?kind=Admit%20card"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#7c3aed"/><rect x="7" y="12" width="34" height="24" rx="4" fill="#fff"/><circle cx="18" cy="24" r="6" fill="#ddd6fe"/><path d="M27 20h10M27 26h8" stroke="#7c3aed" stroke-width="2.8" stroke-linecap="round"/></svg><span class="fb-home-copy"><strong>एडमिट कार्ड</strong><span>Admit Card</span></span></a>
+        <a class="fb-home-tile sky" href="/vacancies?kind=Admission"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#ef4444"/><path d="M5 22l19-11 19 11-19 11z" fill="#fff"/><path d="M14 26v8c4.2 3.2 15.8 3.2 20 0v-8" fill="#fecaca"/><path d="M39 22v13" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></svg><span class="fb-home-copy"><strong>प्रवेश / एडमिशन</strong><span>Admission</span></span></a>
+        <a class="fb-home-tile amber" href="/other-forms"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#2563eb"/><rect x="12" y="7" width="24" height="34" rx="3" fill="#fff"/><path d="M17 18h14M17 25h14M17 32h9" stroke="#2563eb" stroke-width="2.8" stroke-linecap="round"/></svg><span class="fb-home-copy"><strong>अन्य फॉर्म</strong><span>Other Form</span></span></a>
+        <a class="fb-home-tile mint" href="/vacancies?kind=Outsourcing"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#2563eb"/><circle cx="17" cy="17" r="6" fill="#fff"/><circle cx="32" cy="19" r="5" fill="#dbeafe"/><path d="M6 40c1.2-8 5.4-12 11-12s9.8 4 11 12" fill="#fff"/><path d="M26 40c.8-6 3.5-9 7-9 2.6 0 4.6 1.6 6 5" fill="#dbeafe"/></svg><span class="fb-home-copy"><strong>आउटसोर्सिंग नौकरी</strong><span>Outsourcing Jobs</span></span></a>
+        <a class="fb-home-tile rose" href="/applications"><svg class="fb-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#7c3aed"/><path d="M7 18h12l4 5h18a2 2 0 0 1 2 2v13a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V18z" fill="#fff"/><path d="M7 26h34" stroke="#ddd6fe" stroke-width="3"/></svg><span class="fb-home-copy"><strong>मेरे आवेदन</strong><span>My Applications</span></span></a>
+    </div>
+    <div class="fb-tiles fb-kept">
         <a class="fb-tile fb-mint" href="/profile"><i class="fb-ico">P</i><div><strong>My Profile</strong><span>Apni personal information manage karein</span></div></a>
         <a class="fb-tile fb-sky" href="/test-form"><i class="fb-ico">A</i><div><strong>Auto Fill Form</strong><span>Pehle profile, phir form. OTP aur Submit aap karenge</span></div></a>
     </div>
-    <div class="fb-row">
+    <div class="fb-row fb-kept">
         <a href="/documents">Documents Manage</a>
         <a href="/vacancies">Find Vacancies</a>
         <a href="/applications">My Applications</a>
     </div>
+    <section class="card fb-updates">
+        <div class="fb-updates-head">
+            <h2>Latest Updates</h2>
+            <a href="/vacancies">See All</a>
+        </div>
+        <div id="home-updates"><p class="fb-note">Loading...</p></div>
+    </section>
     <section class="fb-rule">
         <strong>Rules &amp; Regulations</strong>
         <p class="fb-note">Form filling yahin rukta hai jahan site password, OTP, CAPTCHA, payment ya final Submit maange.</p>
@@ -1598,7 +1617,7 @@ async function analyzeForm() {
             });
             lines.push("Submitted: false");
             lines.push(JSON.stringify(data.result, null, 2));
-            showRootResult(lines.join("\n"));
+            showRootResult(lines.join("\\n"));
 
         }
 
@@ -1623,6 +1642,98 @@ async function analyzeForm() {
 
 }
 
+function homeToday() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return now.getFullYear() + "-" + month + "-" + day;
+}
+
+function isoDay(value) {
+    const day = String(value || "").slice(0, 10);
+    return /^\\d{4}-\\d{2}-\\d{2}$/.test(day) ? day : "";
+}
+
+function titleDay(title) {
+    const match = String(title || "").match(
+        /\\|\\s*(?:Last Date|Coming|Out)\\s*:\\s*(\\d{2})\\/(\\d{2})\\/(\\d{4})/
+    );
+    if (!match) {
+        return "";
+    }
+    return match[3] + "-" + match[2] + "-" + match[1];
+}
+
+function liveDate(item) {
+    const today = homeToday();
+    const found = [
+        isoDay(item.application_end),
+        isoDay(item.exam_date),
+        isoDay(item.application_start),
+        titleDay(item.title)
+    ].filter(function(day) {
+        return day && day >= today;
+    });
+    found.sort();
+    return found.length ? found[0] : "";
+}
+
+function updateLabel(item) {
+    const title = item.title || "Notice";
+    if (titleDay(title)) {
+        return title;
+    }
+    const day = liveDate(item);
+    if (!day) {
+        return title;
+    }
+    const shown = day.slice(8, 10) + "/" + day.slice(5, 7) + "/" + day.slice(0, 4);
+    const end = isoDay(item.application_end);
+    const word = end && end >= homeToday() ? "Last Date" : "Coming";
+    return title + " | " + word + " : " + shown;
+}
+
+async function loadHomeUpdates() {
+    const box = document.getElementById("home-updates");
+    if (!box) {
+        return;
+    }
+    try {
+        const response = await fetch("/api/vacancies");
+        const data = await response.json();
+        const items = (data.vacancies || []).filter(function(item) {
+            return liveDate(item);
+        }).sort(function(a, b) {
+            return liveDate(a) < liveDate(b) ? -1 : liveDate(a) > liveDate(b) ? 1 : 0;
+        }).slice(0, 3);
+        box.replaceChildren();
+        if (!data.success || !items.length) {
+            const empty = document.createElement("p");
+            empty.className = "fb-note";
+            empty.textContent = "Abhi koi current link nahi hai.";
+            box.appendChild(empty);
+            return;
+        }
+        items.forEach(function(item) {
+            const row = document.createElement("div");
+            row.className = "fb-update";
+            const title = document.createElement("a");
+            title.href = item.official_link || (item.id ? ("/job/" + encodeURIComponent(item.id)) : "/vacancies");
+            if (item.official_link) {
+                title.target = "_blank";
+                title.rel = "noopener noreferrer";
+            }
+            title.textContent = updateLabel(item);
+            row.appendChild(title);
+            box.appendChild(row);
+        });
+    } catch (error) {
+        box.textContent = "Could not load vacancies.";
+    }
+}
+
+loadHomeUpdates();
+
 </script>
 
 </body>
@@ -1643,8 +1754,15 @@ _MOBILE_NAV_PATHS = {
     "/documents",
     "/vacancies",
     "/applications",
+    "/other-forms",
     "/account",
 }
+
+
+def _uses_mobile_nav(path):
+    if path in _MOBILE_NAV_PATHS:
+        return True
+    return path.startswith("/job/") or path.startswith("/apply/") or path.startswith("/other-fill/")
 
 _MOBILE_NAV = """
 <header class="fb-header">
@@ -1654,11 +1772,31 @@ _MOBILE_NAV = """
 </header>
 <nav class="fb-nav" aria-label="FormBharat">
 <a href="/"><span>Home</span><small>होम</small></a>
-<a href="/profile"><span>Profile</span><small>प्रोफ़ाइल</small></a>
-<a href="/documents"><span>Documents</span><small>दस्तावेज़</small></a>
-<a href="/vacancies"><span>Vacancies</span><small>नौकरी</small></a>
-<a href="/applications"><span>Applications</span><small>आवेदन</small></a>
+<a href="/vacancies"><span>Job Search</span><small>नौकरी</small></a>
+<a href="/applications"><span>My Applications</span><small>आवेदन</small></a>
+<a href="#more" id="fb-more-toggle"><span>More</span><small>और</small></a>
 </nav>
+<div class="fb-more" id="fb-more-panel" hidden>
+<a href="/profile">Profile प्रोफ़ाइल</a>
+<a href="/documents">Documents दस्तावेज़</a>
+<a href="/other-forms">Other Form</a>
+<a href="/account">खाता</a>
+</div>
+<script>
+(function () {
+    var toggle = document.getElementById("fb-more-toggle");
+    var panel = document.getElementById("fb-more-panel");
+    if (!toggle || !panel) return;
+    toggle.addEventListener("click", function (event) {
+        event.preventDefault();
+        if (panel.hasAttribute("hidden")) {
+            panel.removeAttribute("hidden");
+        } else {
+            panel.setAttribute("hidden", "hidden");
+        }
+    });
+})();
+</script>
 <svg class="fb-flag-wave" viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true"><path d="M0 36c80-28 150 12 220 18 80 6 120-16 180-22v118H0Z" fill="#ff9933"/><path d="M0 68c80-24 150 10 220 14 70 4 120-12 180-16v84H0Z" fill="#fff"/><path d="M0 102c70-20 150 8 220 10 70 2 120-8 180-12v50H0Z" fill="#138808"/></svg>
 <style>
 :root{--fb-ink:#16324f;--fb-green:#12833a;--fb-saffron:#ef8b14;--fb-line:#e6edf5}
@@ -1677,12 +1815,26 @@ h1,h2{color:#17345c;letter-spacing:0}
 .fb-flag-wave{position:fixed;left:0;right:0;bottom:0;z-index:4;width:100%;height:118px;pointer-events:none}/* tiranga */
 .fb-nav{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;gap:4px;margin:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:transparent;border-top:0;box-shadow:none}
 .fb-nav a{flex:1 1 0;min-width:0;box-sizing:border-box;text-align:center;padding:8px 2px;background:#fff;color:var(--fb-green);text-decoration:none;border-radius:14px;font-weight:800;font-size:11px;line-height:1.15}
+.fb-more{position:fixed;left:0;right:0;bottom:70px;z-index:7;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 10px 10px}
+.fb-more[hidden]{display:none !important}
+.fb-more a{pointer-events:auto;background:#fff;border-radius:12px;padding:8px 10px;text-decoration:none;font-weight:800;font-size:12px;box-shadow:0 6px 16px rgba(22,50,79,.12)}
 .fb-nav small{display:block;color:#6b7c90;font-size:10px;font-weight:700}
+.fb-nav a span{display:block}
 body .card{background:#fff;border:1px solid #edf2f7;border-radius:22px;box-shadow:0 10px 28px rgba(22,50,79,.06);padding:18px 16px;margin-bottom:14px}
 .fb-hero{text-align:center;background:linear-gradient(180deg,#fff,#f5fbff)}
 .fb-hero h1{margin:8px 0 6px;font-size:1.45rem;line-height:1.25}
 .fb-kicker{margin:0;color:#5d7088;font-weight:700}
 .fb-logo{width:92px;height:92px;margin:4px auto 8px;border-radius:50%;background:#fff;box-shadow:0 8px 20px rgba(22,50,79,.08)}
+.fb-home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 18px}
+.fb-home-tile{display:flex;flex-direction:row;align-items:center;gap:10px;min-height:78px;padding:10px 10px 10px 12px;border-radius:18px;text-decoration:none;color:var(--fb-ink);font-weight:800;box-shadow:0 8px 18px rgba(22,50,79,.06)}
+.fb-home-tile .fb-mark{width:52px;height:52px;flex:0 0 52px;padding:0;border-radius:16px;background:transparent;box-shadow:0 8px 14px rgba(22,50,79,.2)}
+.fb-home-copy{display:flex;flex-direction:column;gap:2px;min-width:0;color:var(--fb-ink)}
+.fb-home-copy strong{color:var(--fb-ink);font-size:.92rem;line-height:1.15}
+.fb-home-copy span{color:#5d7088;font-size:.74rem;font-weight:700;line-height:1.15}
+.fb-home-tile.mint{background:#e7f8ee}
+.fb-home-tile.rose{background:#ffe8ec}
+.fb-home-tile.sky{background:#e7f1ff}
+.fb-home-tile.amber{background:#fff3df}
 .fb-tiles{display:grid;gap:12px;margin:14px 0}
 .fb-tile{display:flex;gap:12px;align-items:center;padding:16px;border-radius:22px;text-decoration:none;color:var(--fb-ink);box-shadow:0 8px 20px rgba(22,50,79,.05)}
 .fb-tile strong{display:block;font-size:1.05rem}
@@ -1699,12 +1851,21 @@ body .card{background:#fff;border:1px solid #edf2f7;border-radius:22px;box-shado
 .fb-row a:nth-child(2){background:#fff3df}
 .fb-row a:nth-child(3){background:#f3e8ff}
 .fb-rule{background:#e7f8ee;border-radius:22px;padding:14px 16px;margin-bottom:14px}
+.fb-updates h2{margin:0;font-size:1.05rem}
+.fb-updates-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fb-update{display:block;padding:12px 0;border-top:1px solid #e6edf5;text-decoration:none;color:var(--fb-ink)}
+.fb-update a{display:block;color:#1a4f9c;font-weight:700;text-decoration:underline}
+.fb-update strong{display:block;color:var(--fb-ink)}
+.fb-update span{display:block;color:#5d7088;font-size:.9rem;font-weight:600}
 body label{color:#24507a;font-weight:700}
 body input,body select,body textarea{width:100%;box-sizing:border-box;border:1px solid #d9e3ee;border-radius:14px;background:#f8fbfe;color:var(--fb-ink);padding:14px;font-size:16px}
 body button:not(.delete),body .fb-go{display:block;width:100%;box-sizing:border-box;background:var(--fb-green);color:#fff;border:0;border-radius:16px;min-height:52px;margin-top:14px;font-weight:800;font-size:1.05rem;text-align:center;text-decoration:none;scroll-margin-bottom:120px}
 body button:not(.delete):hover{background:#0f6d2e}
 body button.delete{background:#b3261e;color:#fff;border:0;border-radius:14px}
 .fb-note{margin:8px 0 0;color:#5d7088}
+.fb-alert{background:#fff4f4;color:#9d174d;border-radius:12px;padding:10px 12px}
+.ok{color:#12833a;font-weight:800}
+.fb-check{display:flex;gap:10px;align-items:center;margin-top:12px;font-weight:700}
 .fb-status{display:inline-block;margin:0 0 8px;padding:4px 10px;border-radius:999px;background:#e8f8ee;color:var(--fb-green);font-weight:800}
 h2.fb-section{margin:18px 0 8px;padding:12px 14px;border-radius:16px;font-size:1rem}
 h2.fb-sec-personal{background:#e7f1ff;color:#1d4e89}
@@ -1716,6 +1877,14 @@ h2.fb-sec-category{background:#f3e8ff;color:#6d28d9}
 .fb-meter i::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--fb-fill,0%);background:linear-gradient(90deg,#138a3a,#8ed35a)}
 .fb-split{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;color:#8aa;margin:8px 0}
 .fb-split::before,.fb-split::after{content:"";height:1px;background:#e1e8f0}
+.fb-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #eef3f8;font-weight:700}
+.fb-line b{color:#9a3412;font-size:.92rem}
+.fb-line b.ok{color:#12833a}
+.fb-banner{background:#e8f8ee;border-radius:18px;padding:14px}
+.fb-banner p{margin:6px 0 0}
+.fb-rupee{margin:6px 0;font-size:2.4rem;font-weight:800;color:#12833a}
+.fb-ghost{background:#fff !important;color:#12833a !important;border:2px solid #12833a}
+.fb-choice{display:flex;gap:10px;align-items:flex-start;margin-top:10px;padding:12px;border:1px solid #d9e3ee;border-radius:16px;background:#fff}
 a{color:var(--fb-green)}
 .fb-auth{text-align:left}
 .fb-auth h1,.fb-auth .fb-lead{text-align:center}
@@ -1741,7 +1910,7 @@ def _inject_mobile_nav(html):
 
 @app.after_request
 def add_mobile_nav(response):
-    if request.path not in _MOBILE_NAV_PATHS or response.status_code != 200:
+    if not _uses_mobile_nav(request.path) or response.status_code != 200:
         return response
     if response.mimetype != "text/html":
         return response
@@ -1755,11 +1924,23 @@ def add_mobile_nav(response):
 
 @app.route("/")
 def home():
-    from app.ownership import current_user_id
+    from app.accounts import user_full_name
+    from app.ownership import SlotAccessError, current_user_id, owned_slot_for_session
+    from app.profile import get_profile
 
+    signed_in = current_user_id() is not None
+    greet_name = ""
+    if signed_in:
+        greet_name = user_full_name(current_user_id())
+        try:
+            saved = get_profile(owned_slot_for_session())
+            greet_name = str((saved or {}).get("name") or greet_name or "").strip()
+        except SlotAccessError:
+            pass
     return render_template_string(
         PAGE,
-        signed_in=current_user_id() is not None,
+        signed_in=signed_in,
+        greet_name=greet_name,
     )
 
 
@@ -1770,70 +1951,165 @@ VACANCIES_PAGE = """
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FormBharat Vacancies</title>
-<style>
-body{font-family:Arial,sans-serif;background:#f4f7f6;margin:0;padding:20px}
-.container{max-width:700px;margin:auto}
-h1{color:#146c43}
-.card{background:#fff;padding:16px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-wrap:anywhere}
-button{width:100%;padding:14px;background:#146c43;color:#fff;border:0;border-radius:8px;font-size:16px;font-weight:bold}
-a{color:#146c43}
-</style>
 </head>
 <body>
 <div class="container">
-<section class="card fb-hero">
-<h1>Find Vacancies</h1>
-<p class="fb-note">These are local profile slots, not signed-in accounts. Official links stay read-only.</p>
-</section>
-<button type="button" id="refresh">Refresh</button>
+<style>
+.fb-board{display:grid;grid-template-columns:1fr;gap:12px;margin-top:8px}
+#vacancy-list{display:contents}
+.fb-col{background:#fff;border:2px solid #9f1239;border-radius:4px;overflow:hidden}
+.fb-col h2{margin:0;padding:8px 10px;background:#9f1239;color:#fff;text-align:center;font-size:1.15rem}
+.fb-col ul{margin:0;padding:8px 12px 10px 22px}
+.fb-col li{margin:6px 0;line-height:1.35}
+.fb-col a{color:#1d4ed8;font-weight:700;text-decoration:underline}
+@media(min-width:900px){.fb-board{grid-template-columns:1fr 1fr 1fr}}
+</style>
 <p id="vacancy-message">Loading vacancies...</p>
+<div class="fb-board">
 <div id="vacancy-list"></div>
 </div>
+</div>
 <script>
-function addLine(parent, label, value) {
-    if (value === null || value === undefined || String(value).trim() === "") {
-        return;
+let savedNotices = [];
+let pickedKind = "";
+
+function noticeKind(item) {
+    const text = [
+        item.category,
+        item.title,
+        item.description
+    ].join(" ").toLowerCase();
+    if (text.indexOf("answer key") >= 0 || text.indexOf("answerkey") >= 0) {
+        return "Answer key";
     }
-    const line = document.createElement("p");
-    const strong = document.createElement("strong");
-    strong.textContent = label;
-    line.appendChild(strong);
-    line.appendChild(document.createTextNode(" " + value));
-    parent.appendChild(line);
+    if (text.indexOf("syllabus") >= 0) {
+        return "Syllabus";
+    }
+    if (text.indexOf("admission") >= 0 || text.indexOf("dakhila") >= 0) {
+        return "Admission";
+    }
+    if (text.indexOf("result") >= 0 || text.indexOf("natija") >= 0) {
+        return "Result";
+    }
+    if (
+        text.indexOf("admit") >= 0
+        || text.indexOf("hall ticket") >= 0
+        || text.indexOf("call letter") >= 0
+    ) {
+        return "Admit card";
+    }
+    if (text.indexOf("outsourcing") >= 0 || text.indexOf("outsource") >= 0) {
+        return "Outsourcing";
+    }
+    if (
+        text.indexOf("form") >= 0
+        || text.indexOf("naukri") >= 0
+        || text.indexOf("bharti") >= 0
+        || text.indexOf("recruit") >= 0
+        || text.indexOf("vacancy") >= 0
+    ) {
+        return "Naukri aur form";
+    }
+    return "Aur notice";
+}
+
+function shownDate(value) {
+    const parts = String(value || "").slice(0, 10).split("-");
+    if (parts.length !== 3 || parts[0].length !== 4) {
+        return "";
+    }
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+}
+
+function todayStamp() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return now.getFullYear() + "-" + month + "-" + day;
+}
+
+function linkDate(item) {
+    const today = todayStamp();
+    const end = String(item.application_end || "").slice(0, 10);
+    const start = String(item.application_start || "").slice(0, 10);
+    const exam = String(item.exam_date || "").slice(0, 10);
+    if (end && end >= today) {
+        return " | Last Date : " + shownDate(end);
+    }
+    if (start && start > today) {
+        return " | Coming : " + shownDate(start);
+    }
+    if (exam && exam >= today) {
+        return " | Coming : " + shownDate(exam);
+    }
+    if (end) {
+        return " | Last Date : " + shownDate(end);
+    }
+    return "";
 }
 
 function renderVacancy(item) {
-    const card = document.createElement("article");
-    card.className = "card";
-    const title = document.createElement("h2");
-    title.textContent = item.title || "Vacancy";
-    card.appendChild(title);
-    addLine(card, "Organization:", item.organization);
-    addLine(card, "Category:", item.category);
-    addLine(card, "Eligibility:", item.eligibility);
-    const eligibilityNote = document.createElement("p");
-    eligibilityNote.textContent = "Eligibility text is not an automatic decision.";
-    card.appendChild(eligibilityNote);
-    addLine(card, "Details:", item.description);
-    addLine(card, "Opens:", item.application_start);
-    addLine(card, "Deadline:", item.application_end);
-    addLine(card, "Exam date:", item.exam_date);
-    addLine(card, "Status:", item.status);
-    addLine(card, "Source:", item.source_name);
-    const link = String(item.official_link || "");
-    if (link.startsWith("https://") || link.startsWith("http://")) {
-        const anchor = document.createElement("a");
-        anchor.href = link;
-        anchor.textContent = "Official link";
-        card.appendChild(anchor);
+    const line = document.createElement("li");
+    const card = document.createElement("a");
+    const kind = noticeKind(item);
+    const formKind = kind === "Naukri aur form" || kind === "Admission" || kind === "Outsourcing";
+    if (formKind && item.id) {
+        card.href = "/job/" + encodeURIComponent(item.id);
+    } else {
+        card.href = item.official_link || (item.id ? ("/job/" + encodeURIComponent(item.id)) : "/vacancies");
+        if (item.official_link) {
+            card.target = "_blank";
+            card.rel = "noopener noreferrer";
+        }
     }
-    return card;
+    card.textContent = (item.title || "Notice") + linkDate(item);
+    line.appendChild(card);
+    return line;
+}
+
+function showNotices() {
+    const message = document.getElementById("vacancy-message");
+    const list = document.getElementById("vacancy-list");
+    const columns = [
+        ["Result", "Results"],
+        ["Admit card", "Admit Cards"],
+        ["Naukri aur form", "Latest Jobs"],
+        ["Answer key", "Answer Key"],
+        ["Admission", "Admission"],
+        ["Outsourcing", "Outsourcing Jobs"]
+    ];
+    list.replaceChildren();
+    if (!savedNotices.length) {
+        message.textContent = "No vacancies saved yet.";
+        return;
+    }
+    message.textContent = "";
+    columns.forEach(function(column) {
+        if (pickedKind && pickedKind !== column[0]) {
+            return;
+        }
+        const group = savedNotices.filter(function(item) {
+            return noticeKind(item) === column[0];
+        });
+        if (!group.length) {
+            return;
+        }
+        const box = document.createElement("section");
+        box.className = "fb-col";
+        const heading = document.createElement("h2");
+        heading.textContent = column[1];
+        box.appendChild(heading);
+        const items = document.createElement("ul");
+        group.forEach(function(item) {
+            items.appendChild(renderVacancy(item));
+        });
+        box.appendChild(items);
+        list.appendChild(box);
+    });
 }
 
 async function loadVacancies() {
     const message = document.getElementById("vacancy-message");
-    const list = document.getElementById("vacancy-list");
-    list.replaceChildren();
     message.textContent = "Loading vacancies...";
     try {
         const response = await fetch("/api/vacancies");
@@ -1842,21 +2118,18 @@ async function loadVacancies() {
             message.textContent = data.error || "Could not load vacancies.";
             return;
         }
-        const vacancies = data.vacancies || [];
-        if (!vacancies.length) {
-            message.textContent = "No vacancies saved yet.";
-            return;
-        }
-        message.textContent = "";
-        vacancies.forEach(function(item) {
-            list.appendChild(renderVacancy(item));
-        });
+        savedNotices = data.vacancies || [];
+        showNotices();
     } catch (error) {
         message.textContent = "Could not load vacancies.";
     }
 }
 
-document.getElementById("refresh").onclick = loadVacancies;
+try {
+    pickedKind = new URLSearchParams(window.location.search).get("kind") || "Naukri aur form";
+} catch (error) {
+    pickedKind = "Naukri aur form";
+}
 loadVacancies();
 </script>
 </body>
@@ -1885,11 +2158,12 @@ button{margin-top:12px;background:#146c43;color:#fff;border:0;font-weight:bold}
 <body>
 <div class="container">
 <section class="card fb-hero">
-<h1>My Applications</h1>
+<h1>Mere form</h1>
+<p class="fb-note">Yahan dikhega kaunsa form aapne yahan save kiya. Sarkari site par submit nahi hota.</p>
 <p class="fb-note">These are local profile slots, not signed-in accounts. Saving a status here does not submit a government form.</p>
 </section>
 <input id="profile_id" type="hidden" data-slot="{{ profile_slot }}">
-<button type="button" id="load">Show applications</button>
+<button type="button" id="load">Dikhao</button>
 <p id="application-message">Aapki applications yahin dikhengi.</p>
 <div id="application-list"></div>
 </div>
@@ -1951,6 +2225,12 @@ function renderApplication(item, history) {
     addLine(card, "Deadline:", item.deadline);
     addLine(card, "Official link:", item.official_link);
     addLine(card, "Updated:", item.updated_at);
+    if (item.vacancy_id) {
+        const job = document.createElement("a");
+        job.href = "/job/" + encodeURIComponent(item.vacancy_id);
+        job.textContent = "Job details";
+        card.appendChild(job);
+    }
     card.appendChild(renderHistory(history));
     return card;
 }
@@ -2001,9 +2281,98 @@ document.getElementById("load").onclick = loadApplications;
 """
 
 
+from app.board_registration import register_board_routes
+from app.apply_ui import register_apply_routes
+register_board_routes(app, _viewer_slot)
+register_apply_routes(app)
+
+
 @app.route("/vacancies")
 def vacancies_page():
     return VACANCIES_PAGE
+
+
+OTHER_FORMS_PAGE = """
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FormBharat Other Form</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f7f6;margin:0;padding:20px}
+.container{max-width:700px;margin:auto}
+h1{color:#146c43}
+h2{margin:0 0 6px;font-size:1.25rem}
+.card{background:#fff;padding:16px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-wrap:anywhere}
+.fb-links{margin:8px 0 0;padding-left:18px}
+.fb-links a{color:#1d4ed8}
+a{color:#146c43;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="container">
+<section class="card fb-hero">
+<h1>Other Form</h1>
+</section>
+<article class="card">
+<h2>PAN card</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/pan">incometax.gov.in</a></li>
+</ul>
+</article>
+<article class="card">
+<h2>Ration card</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/ration">nfsa.gov.in</a></li>
+</ul>
+
+</article>
+<article class="card">
+<h2>Voter card</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/voter">voters.eci.gov.in</a></li>
+</ul>
+</article>
+<article class="card">
+<h2>Driving licence</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/licence">sarathi.parivahan.gov.in</a></li>
+</ul>
+</article>
+<article class="card">
+<h2>Passport</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/passport">passportindia.gov.in</a></li>
+</ul>
+</article>
+<article class="card">
+<h2>Shram card</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/shram">eshram.gov.in</a></li>
+</ul>
+</article>
+<article class="card">
+<h2>Ayushman card</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/ayushman">nha.gov.in</a></li>
+</ul>
+</article>
+<article class="card">
+<h2>Kisan Samman Nidhi</h2>
+<ul class="fb-links">
+<li><a href="/other-fill/kisan">pmkisan.gov.in</a></li>
+</ul>
+</article>
+</div>
+</body>
+</html>
+"""
+
+
+@app.route("/other-forms")
+def other_forms_page():
+    return OTHER_FORMS_PAGE
 
 
 @app.route("/applications")
@@ -2040,10 +2409,13 @@ def access_api():
 @app.route("/health")
 def health():
 
+    from app.runtime_config import gemini_api_key
+
     return jsonify({
         "status": "ok",
         "service": "FormBharat",
-        "version": "1.0"
+        "version": "1.0",
+        "gemini_configured": bool(gemini_api_key()),
     })
 
 
@@ -2056,7 +2428,7 @@ MAX_ANALYZE_HTML_BYTES = 1_000_000
 
 @app.route("/api/local-assist", methods=["POST"])
 def local_assist_api():
-    """Read a local file page for one verified profile slot.
+    """Open a file or http(s) form page for one verified profile slot.
 
     The request cannot supply profile values. Reread returns the DOM
     of the page already open in that slot. Nothing is submitted.
@@ -2092,6 +2464,12 @@ def local_assist_api():
                 "error": str(error),
                 "submitted": False,
             }), 403
+        if "playwright" in type(error).__module__:
+            return jsonify({
+                "success": False,
+                "error": "Ye page nahi khula",
+                "submitted": False,
+            }), 400
         raise
     return jsonify(result)
 
@@ -2196,12 +2574,17 @@ def analyze():
             if ai_result.get("reason"):
                 field["ai_block_reason"] = ai_result["reason"]
 
+        from app.fill_profile import with_saved_identity
+        from app.gemini_assist import assist_fields
+        from app.rendered_assist import apply_fill_boundaries, build_review
+
+        fill_from = with_saved_identity(profile, profile_id) if profile is not None else None
         matched_fields = match_profile_to_fields(
             analyzed_fields,
-            profile
+            fill_from
         )
 
-        from app.rendered_assist import apply_fill_boundaries, build_review
+        assist_fields(matched_fields, fill_from)
 
         withheld = apply_fill_boundaries(matched_fields)
 

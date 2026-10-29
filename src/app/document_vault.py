@@ -2,7 +2,6 @@ import os
 import sqlite3
 import hashlib
 import json
-import re
 import uuid
 from datetime import datetime
 from flask import jsonify, render_template_string, request, send_file
@@ -262,35 +261,10 @@ def _path_inside_storage(storage_path):
 
 
 def build_extracted_data(extracted_text):
-    """
-    Convert OCR text into basic structured JSON.
-    Keep raw OCR text so no information is lost.
-    """
-    data = {
-        "name": "",
-        "father_name": "",
-        "guardian_name": "",
-        "dob": "",
-        "class": "",
-        "raw_text": extracted_text or ""
-    }
+    """Convert OCR text into fields. Raw text is kept. Profile is not changed."""
+    from app.document_reader import read_document_text
 
-    text = extracted_text or ""
-
-    patterns = {
-        "name": r"(?im)^\s*(?:name|kame)\s*[:\-]\s*(.+)$",
-        "father_name": r"(?im)^\s*(?:father\s*name|father)\s*[:\-]\s*(.+)$",
-        "guardian_name": r"(?im)^\s*guardian(?:\s*name)?\s*[:\-]\s*(.+)$",
-        "dob": r"(?im)^\s*(?:dob|date\s*of\s*birth)\s*[:\-]\s*(.+)$",
-        "class": r"(?im)^\s*class\s*[:\-]\s*(.+)$"
-    }
-
-    for key, pattern in patterns.items():
-        match = re.search(pattern, text)
-        if match:
-            data[key] = match.group(1).strip()
-
-    return data
+    return read_document_text(extracted_text)
 
 
 def register_document_vault(app):
@@ -838,6 +812,21 @@ async function loadDocuments(){
   block.appendChild(document.createElement('br'));
   block.appendChild(document.createTextNode('Processing: '+(item.processing_status||'unknown')+'. OCR is not verification.'));
   block.appendChild(document.createElement('br'));
+  let readData={};
+  try{readData=JSON.parse(item.extracted_data||'{}');}catch(error){readData={};}
+  const readRows=[];
+  if(readData.name)readRows.push('नाम: '+readData.name);
+  if(readData.father_name)readRows.push('पिता: '+readData.father_name);
+  if(readData.dob)readRows.push('जन्म तिथि: '+readData.dob);
+  if(readData.gender)readRows.push('लिंग: '+readData.gender);
+  if(readData.pan_number)readRows.push('पैन: '+readData.pan_number);
+  if(readData.aadhaar_number)readRows.push('आधार: '+readData.aadhaar_number);
+  if(readData.roll_number)readRows.push('रोल: '+readData.roll_number);
+  if(!readRows.length)readRows.push('पढ़ा नहीं गया।');
+  readRows.forEach(function(row){
+   block.appendChild(document.createTextNode(row));
+   block.appendChild(document.createElement('br'));
+  });
   const link=document.createElement('a');
   link.href='/api/documents/file/'+encodeURIComponent(item.id)+'?profile_id='+encodeURIComponent(id);
   link.target='_blank';

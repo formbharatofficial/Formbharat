@@ -89,10 +89,25 @@ def test_missing_verified_profile_fills_nothing(tmp_path):
 def test_non_local_url_is_rejected_without_opening():
     opener = LocalOpener(PAGE)
 
-    with pytest.raises(ValueError, match="local file page"):
-        assist_rendered_page(opener, "https://example.gov.in/apply", {"name": "A"})
+    with pytest.raises(ValueError, match="form page"):
+        assist_rendered_page(opener, "javascript:alert(1)", {"name": "A"})
 
     assert opener.opened == []
+
+
+def test_https_form_page_is_filled_and_not_submitted():
+    opener = LocalOpener(PAGE)
+    result = assist_rendered_page(
+        opener,
+        "https://example.gov.in/apply",
+        {"name": "Sunil Kumar"},
+    )
+
+    assert opener.opened == ["https://example.gov.in/apply"]
+    assert result["submitted"] is False
+    filled = {item["field"]: item["value"] for item in result["filled"]}
+    assert filled["full_name"] == "Sunil Kumar"
+    assert "submit_application" not in filled
 
 
 def test_reread_discovers_fields_on_the_new_rendered_page(tmp_path, monkeypatch):
@@ -358,7 +373,7 @@ def test_local_assist_rejects_profile_payloads_before_opening(tmp_path):
         opened.append("opened")
         raise AssertionError("rejected payloads must not create a browser")
 
-    with pytest.raises(ValueError, match="profile_id and local file URL"):
+    with pytest.raises(ValueError, match="profile_id and form page URL"):
         run_local_assist(
             {
                 "url": _file_url(tmp_path),
@@ -368,9 +383,9 @@ def test_local_assist_rejects_profile_payloads_before_opening(tmp_path):
             {},
             factory,
         )
-    with pytest.raises(ValueError, match="local file"):
+    with pytest.raises(ValueError, match="form page"):
         run_local_assist(
-            {"url": "https://example.test/form", "profile_id": 1},
+            {"url": "javascript:alert(1)", "profile_id": 1},
             {},
             factory,
         )

@@ -5,9 +5,44 @@ import pytesseract
 from PIL import Image
 
 
+_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+if os.path.exists(_TESSERACT):
+    pytesseract.pytesseract.tesseract_cmd = _TESSERACT
+
+
+def _prepare_tessdata():
+    folder = os.path.join(os.environ.get("LOCALAPPDATA", ""), "FormBharat", "tessdata")
+    if os.path.isfile(os.path.join(folder, "hin.traineddata")) and os.path.isfile(
+        os.path.join(folder, "eng.traineddata")
+    ):
+        os.environ["TESSDATA_PREFIX"] = folder
+    return os.environ.get("TESSDATA_PREFIX", "")
+
+
+def _ocr_language():
+    _prepare_tessdata()
+    try:
+        languages = set(pytesseract.get_languages(config=""))
+    except Exception:
+        return "eng"
+    if "hin" in languages and "eng" in languages:
+        return "hin+eng"
+    if "eng" in languages:
+        return "eng"
+    return "eng"
+
+
 def ocr_image(file_path):
-    image = Image.open(file_path)
-    return pytesseract.image_to_string(image, lang="eng").strip()
+    image = Image.open(file_path).convert("L")
+    if max(image.size) < 1200:
+        image = image.resize((image.width * 2, image.height * 2), Image.Resampling.LANCZOS)
+    language = _ocr_language()
+    try:
+        return pytesseract.image_to_string(image, lang=language).strip()
+    except Exception:
+        if language == "eng":
+            raise
+        return pytesseract.image_to_string(image, lang="eng").strip()
 
 
 def ocr_pdf(file_path):
